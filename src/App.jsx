@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock, 
   Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy, 
-  Eye, EyeOff, Check, X, Award, Handshake, Info, Headphones, Settings, 
-  FileText, Mail, Key, UserCheck, Share2, LogOut
+  Check, X, Award, Handshake, Info, Headphones, Settings, 
+  FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List
 } from 'lucide-react';
 
 import energyBanner from './assets/energy_banner.png';
@@ -12,6 +12,15 @@ import metalsBanner from './assets/metals_banner.png';
 
 const API_BASE = '/api';
 
+// Sticky 5-Tab Navigation Items
+const bottomNavItems = [
+  { id: 'dashboard', label: 'Home', icon: Cpu },
+  { id: 'invest', label: 'Projects', icon: Layers },
+  { id: 'tasks', label: 'Tasks', icon: Award },
+  { id: 'team', label: 'Team', icon: Users },
+  { id: 'me', label: 'Me', icon: Settings }
+];
+
 export default function App() {
   // Global States
   const [user, setUser] = useState(null);
@@ -19,34 +28,38 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminToken, setAdminToken] = useState(localStorage.getItem('nex_admin_token') || null);
   const [adminData, setAdminData] = useState(null);
+  const [adminTaskSubmissions, setAdminTaskSubmissions] = useState([]);
 
-  // Layout View States
+  // Responsive Layout View States
   const [landingMode, setLandingMode] = useState(true); // true = landing page, false = app portal
-  const [mobileTab, setMobileTab] = useState('dashboard'); // 'dashboard' (Home), 'invest' (Projects), 'mining', 'team', 'me'
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard' (Home), 'invest' (Projects), 'tasks' (Tasks), 'team', 'me'
   
-  // Interaction & Modals
+  // Modals & Sheets
   const [showAdminLogin, setShowAdminLogin] = useState(false);
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showPartnershipModal, setShowPartnershipModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [miningModalOpen, setMiningModalOpen] = useState(false); // Daily Claim & Vault is now a quick action modal
   const [selectedAgreementProject, setSelectedAgreementProject] = useState(null);
+  const [showFrozenWalletModal, setShowFrozenWalletModal] = useState(false);
   
-  // Clipboard
+  // Copy Actions
   const [isCopied, setIsCopied] = useState(false);
   const [isLinkCopied, setIsLinkCopied] = useState(false);
 
-  // Carousel State
+  // Carousel
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Forms
+  // Auth Forms
   const [signupForm, setSignupForm] = useState({ phone: '', password: '', referredByCode: '' });
   const [loginForm, setLoginForm] = useState({ phone: '', password: '' });
   const [adminForm, setAdminForm] = useState({ username: '', password: '' });
   const [isRegistering, setIsRegistering] = useState(false);
   
-  // Transaction Forms
-  const [depositForm, setDepositForm] = useState({ amount: '', channel: 'bKash', trxId: '' });
-  const [withdrawForm, setWithdrawForm] = useState({ amount: '', channel: 'bKash Mobile', destination: '', source: 'earnings' });
+  // Transaction Forms (USD)
+  const [depositForm, setDepositForm] = useState({ amount: '', channel: 'bKash Mobile Deposit', trxId: '' });
+  const [withdrawForm, setWithdrawForm] = useState({ amount: '', channel: 'bKash Mobile Payout', destination: '', source: 'earnings' });
   const [depositModalOpen, setDepositModalOpen] = useState(false);
   const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
   const [txHistoryModalOpen, setTxHistoryModalOpen] = useState(false);
@@ -56,11 +69,15 @@ export default function App() {
   const [vaultAmount, setVaultAmount] = useState('');
   const [vaultDuration, setVaultDuration] = useState('60');
 
-  // Profile Settings Forms
-  const [securityForm, setSecurityForm] = useState({ fullName: '', email: '', password: '' });
+  // Profile Settings Forms (Tab 5)
+  const [profileForm, setProfileForm] = useState({ fullName: '', phone: '', email: '', avatar: '', oldPassword: '', newPassword: '' });
 
-  // Status Feedback
-  const [statusMsg, setStatusMsg] = useState({ text: '', type: '' }); // type: 'success' | 'error' | 'info'
+  // Social Task proof states
+  const [selectedProofFile, setSelectedProofFile] = useState(null);
+  const [proofBase64, setProofBase64] = useState('');
+
+  // Harvesting Progress & Feedback
+  const [statusMsg, setStatusMsg] = useState({ text: '', type: '' });
   const [isMining, setIsMining] = useState(false);
   const [miningPercent, setMiningPercent] = useState(0);
 
@@ -70,6 +87,9 @@ export default function App() {
   const [vaultLocks, setVaultLocks] = useState([]);
   const [telegramFeed, setTelegramFeed] = useState([]);
 
+  // Timer Tick state for rolling tickers
+  const [secondsElapsed, setSecondsElapsed] = useState(0);
+
   // Auto-slide banner
   useEffect(() => {
     const timer = setInterval(() => {
@@ -78,7 +98,15 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Telegram feeds & general simulations
+  // Rolling counter timer tick
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSecondsElapsed(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Fetch Telegram feeds periodically
   useEffect(() => {
     const fetchFeed = async () => {
       try {
@@ -116,9 +144,11 @@ export default function App() {
     if (adminToken) {
       setIsAdmin(true);
       fetchAdminData();
+      fetchAdminTaskSubmissions();
     } else {
       setIsAdmin(false);
       setAdminData(null);
+      setAdminTaskSubmissions([]);
     }
   }, [adminToken]);
 
@@ -139,10 +169,13 @@ export default function App() {
         throw new Error(data.error);
       }
       setUser(data);
-      setSecurityForm({
+      setProfileForm({
         fullName: data.full_name || '',
+        phone: data.phone || '',
         email: data.email || '',
-        password: ''
+        avatar: data.avatar || '',
+        oldPassword: '',
+        newPassword: ''
       });
     } catch (err) {
       console.error(err);
@@ -199,6 +232,20 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setAdminData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAdminTaskSubmissions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/task-submissions`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdminTaskSubmissions(data);
       }
     } catch (err) {
       console.error(err);
@@ -270,7 +317,7 @@ export default function App() {
     setToken(null);
     setUser(null);
     setLandingMode(true);
-    setMobileTab('dashboard');
+    setActiveTab('dashboard');
   };
 
   const handleAdminLogout = () => {
@@ -278,6 +325,7 @@ export default function App() {
     setAdminToken(null);
     setIsAdmin(false);
     setAdminData(null);
+    setAdminTaskSubmissions([]);
   };
 
   // Client Operations
@@ -307,7 +355,6 @@ export default function App() {
 
   // Gamified Manual Daily Energy Harvesting Tapping
   const harvestAllContracts = async () => {
-    // Collect daily payouts from active contracts not yet claimed today
     const claimable = contracts.filter(c => {
       if (c.status !== 'active') return false;
       if (!c.last_claimed_at) return true;
@@ -327,7 +374,6 @@ export default function App() {
     setIsMining(true);
     setMiningPercent(0);
 
-    // Simulated progress duration
     let progress = 0;
     const interval = setInterval(() => {
       progress += 10;
@@ -349,7 +395,7 @@ export default function App() {
           });
           if (res.ok) successCount++;
         } catch (err) {
-          // Ignore individual node failures in loop
+          // Ignore
         }
       }
 
@@ -380,7 +426,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showStatus(`Locked BDT ৳${vaultAmount} in the vault for ${vaultDuration} days.`);
+      showStatus(`Locked $${vaultAmount} in the vault for ${vaultDuration} days.`);
       setVaultAmount('');
       fetchUserProfile();
       fetchVaultLocks();
@@ -412,12 +458,117 @@ export default function App() {
     }
   };
 
-  // 1-Click Commission Claiming
-  const claimTeamCommissions = async () => {
+  // Claim Level pending commissions (Manual Claim)
+  const claimLevelCommission = async (level) => {
     try {
-      const res = await fetch(`${API_BASE}/team/claim-commission`, {
+      const res = await fetch(`${API_BASE}/team/claim-level-commission`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ level })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchUserProfile();
+      fetchUserTxHistory();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  // Attendance task reward ($0.20 instant claim)
+  const claimAttendance = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/attendance`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchUserProfile();
+      fetchUserTxHistory();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  // Submit Social Amplification file proof ($1.00 uploader)
+  const submitSocialTask = async (e) => {
+    e.preventDefault();
+    if (!proofBase64) {
+      showStatus("Please upload a screenshot proof file first.", "error");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/tasks/submit`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          taskName: "Social Amplification Facebook/TikTok",
+          proofImage: proofBase64
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      setSelectedProofFile(null);
+      setProofBase64('');
+      fetchUserProfile();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedProofFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProofBase64(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Claim Recruitment Milestone
+  const claimRecruitmentMilestone = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/user/claim-recruitment-milestone`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchUserProfile();
+      fetchUserTxHistory();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  // Claim Leader Milestones
+  const claimLeaderMilestone = async (milestoneId) => {
+    try {
+      const res = await fetch(`${API_BASE}/user/claim-leader-milestone`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ milestoneId })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -445,8 +596,8 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showStatus("Deposit slip submitted. Approval pending.");
-      setDepositForm({ amount: '', channel: 'bKash', trxId: '' });
+      showStatus("Deposit checkout submitted. Approval pending.");
+      setDepositForm({ amount: '', channel: 'bKash Mobile Deposit', trxId: '' });
       setDepositModalOpen(false);
       fetchUserTxHistory();
     } catch (err) {
@@ -454,7 +605,7 @@ export default function App() {
     }
   };
 
-  // Payout submission
+  // Payout withdrawal submission (Intercepts and opens exception modal on block)
   const handleWithdrawSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -467,10 +618,18 @@ export default function App() {
         body: JSON.stringify(withdrawForm)
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        // Intercept VIP 0 hard lock error
+        if (data.error && data.error.includes("Task Wallet balance is currently frozen")) {
+          setShowFrozenWalletModal(true);
+          setWithdrawModalOpen(false);
+          return;
+        }
+        throw new Error(data.error);
+      }
 
       showStatus("Cashout withdrawal requested successfully.");
-      setWithdrawForm({ amount: '', channel: 'bKash Mobile', destination: '', source: 'earnings' });
+      setWithdrawForm({ amount: '', channel: 'bKash Mobile Payout', destination: '', source: 'earnings' });
       setWithdrawModalOpen(false);
       fetchUserProfile();
       fetchUserTxHistory();
@@ -479,29 +638,68 @@ export default function App() {
     }
   };
 
-  // Security updating
-  const handleSecurityUpdate = async (e) => {
+  // Profile updating (including Avatar upload)
+  const handleProfileUpdate = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${API_BASE}/user/update-security`, {
+      const res = await fetch(`${API_BASE}/user/update-profile`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(securityForm)
+        body: JSON.stringify({
+          fullName: profileForm.fullName,
+          phone: profileForm.phone,
+          email: profileForm.email,
+          avatar: profileForm.avatar,
+          oldPassword: profileForm.oldPassword,
+          newPassword: profileForm.newPassword
+        })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showStatus("Account security updated successfully.");
+      showStatus("Profile details updated successfully.");
       fetchUserProfile();
     } catch (err) {
       showStatus(err.message, 'error');
     }
   };
 
+  const handleAvatarFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileForm({ ...profileForm, avatar: reader.result });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Admin Actions
+  const adminVerifyTask = async (submissionId, action) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/task-submissions/verify`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ submissionId, action })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(`Task submission successfully ${action === 'approve' ? 'approved' : 'rejected'}.`);
+      fetchAdminTaskSubmissions();
+      fetchAdminData();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
   const adminApproveTx = async (txId) => {
     try {
       const res = await fetch(`${API_BASE}/admin/transactions/approve`, {
@@ -515,7 +713,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showStatus("Deposit credited to client wallet.");
+      showStatus("Transaction approved and level commissions calculated.");
       fetchAdminData();
       if (user) {
         fetchUserProfile();
@@ -539,7 +737,7 @@ export default function App() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      showStatus("Transaction rejected. Refunded if withdrawal.");
+      showStatus("Transaction rejected and refunded where applicable.");
       fetchAdminData();
       if (user) {
         fetchUserProfile();
@@ -628,61 +826,117 @@ export default function App() {
   };
 
   // Bangladeshi Flat returns projects definitions
+  // 10-Tier USD Nexora Investment Shop definitions
   const LEASE_PROJECTS = [
     {
-      id: 'solar',
-      name: "Solar Power Grid",
-      description: "Lease solar energy nodes generating daily electric payloads into the regional Bangladeshi network. Managed infrastructure with complete storm insurance.",
-      price: 1000,
-      dailyProfit: 30,
+      id: 'eco_mini',
+      name: "Nexora Eco-Mini Grid",
+      description: "Fractional clean power nodes generating base grid energy outputs.",
+      price: 10,
+      dailyProfit: 0.35,
       duration: 180,
-      totalProfit: 5400,
+      totalProfit: 63,
       bgGradient: "linear-gradient(135deg, #00e676 0%, #00b0ff 100%)",
-      category: "RENEWABLE SOLAR"
+      category: "ECO MINI POWER"
     },
     {
-      id: 'wind',
-      name: "Wind Turbine Project",
-      description: "Lease a share of high-efficiency coastal wind turbines feeding the power network. Optimized for low-maintenance vertical axis offshore generations.",
-      price: 5000,
-      dailyProfit: 160,
+      id: 'smart_home',
+      name: "Nexora Smart Home Grid",
+      description: "Localized solar setups for eco-smart home residential integrations.",
+      price: 30,
+      dailyProfit: 1.10,
       duration: 180,
-      totalProfit: 28800,
+      totalProfit: 198,
       bgGradient: "linear-gradient(135deg, #2979ff 0%, #a012f3 100%)",
+      category: "SMART SOLAR HOME"
+    },
+    {
+      id: 'solar_hub',
+      name: "Nexora Solar Community Hub",
+      description: "Community grid nodes yielding utility-scale solar outputs.",
+      price: 70,
+      dailyProfit: 2.70,
+      duration: 180,
+      totalProfit: 486,
+      bgGradient: "linear-gradient(135deg, #ff9100 0%, #ff3d00 100%)",
+      category: "COMMUNITY SOLAR"
+    },
+    {
+      id: 'agro_pump',
+      name: "Nexora Agro-Solar Pump",
+      description: "Agro-power pumping array providing agricultural water allocations.",
+      price: 100,
+      dailyProfit: 4.00,
+      duration: 180,
+      totalProfit: 720,
+      bgGradient: "linear-gradient(135deg, #00e5ff 0%, #2979ff 100%)",
+      category: "AGRO WATER NODE"
+    },
+    {
+      id: 'wind_farm',
+      name: "Nexora Wind Farm Asset",
+      description: "Coastal wind turbines feeding high efficiency offshore allocations.",
+      price: 300,
+      dailyProfit: 13.00,
+      duration: 180,
+      totalProfit: 2340,
+      bgGradient: "linear-gradient(135deg, #ffd700 0%, #ff6d00 100%)",
       category: "WIND UTILITY"
     },
     {
-      id: 'biomass',
-      name: "Biomass Energy Plant",
-      description: "Lease bio-waste treatment arrays converting agricultural leftovers into utility gas payloads. Highly reliable 24/7 baseload generation network.",
-      price: 15000,
-      dailyProfit: 510,
+      id: 'hydro_plant',
+      name: "Nexora Industrial Hydro-Plant",
+      description: "Utility hydro-electric generator plants driving baseline grid syncs.",
+      price: 700,
+      dailyProfit: 32.00,
       duration: 180,
-      totalProfit: 91800,
-      bgGradient: "linear-gradient(135deg, #ff9100 0%, #ff3d00 100%)",
-      category: "BIO-POWER NODE"
+      totalProfit: 5760,
+      bgGradient: "linear-gradient(135deg, #00e676 0%, #ff9100 100%)",
+      category: "HYDRO BASELINE"
     },
     {
-      id: 'lithium',
-      name: "Lithium Battery Refinery",
-      description: "Rent processing refinery reactors yielding chemical lithium battery inputs. Secured by international industrial hardware delivery contracts.",
-      price: 45000,
-      dailyProfit: 1620,
+      id: 'biomass_plant',
+      name: "Nexora Biomass Power Plant",
+      description: "Agricultural waste combustion nodes providing 24/7 utility feeds.",
+      price: 1000,
+      dailyProfit: 48.00,
       duration: 180,
-      totalProfit: 291600,
-      bgGradient: "linear-gradient(135deg, #00e5ff 0%, #2979ff 100%)",
-      category: "COMMODITY CHEMICALS"
+      totalProfit: 8640,
+      bgGradient: "linear-gradient(135deg, #2979ff 0%, #ff3d00 100%)",
+      category: "BIOMASS NODE"
     },
     {
-      id: 'gold',
-      name: "Gold Refining Facility",
-      description: "Rent precious metal refining pipelines processing raw bullion. Standard high-level custodial security audited by physical asset certificates.",
-      price: 100000,
-      dailyProfit: 3800,
+      id: 'data_center',
+      name: "Nexora Green Data Center",
+      description: "Solar-powered cluster grids routing cloud computing operations.",
+      price: 5000,
+      dailyProfit: 260.00,
       duration: 180,
-      totalProfit: 684000,
-      bgGradient: "linear-gradient(135deg, #ffd700 0%, #ff6d00 100%)",
+      totalProfit: 46800,
+      bgGradient: "linear-gradient(135deg, #a012f3 0%, #ff9100 100%)",
+      category: "CLOUD DATA CENTER"
+    },
+    {
+      id: 'gold_reserve',
+      name: "Nexora Gold Refinery Reserve",
+      description: "Rent physical commodities refining pipelines processing bullion.",
+      price: 10000,
+      dailyProfit: 550.00,
+      duration: 180,
+      totalProfit: 99000,
+      bgGradient: "linear-gradient(135deg, #ffd700 0%, #00e676 100%)",
       category: "CUSTODIAL GOLD"
+    },
+    {
+      id: 'energy_matrix',
+      name: "Nexora Sovereign Energy Matrix",
+      description: "State-level utility clean energy allocations synched globally.",
+      price: 50000,
+      dailyProfit: 3000.00,
+      duration: 180,
+      totalProfit: 540000,
+      bgGradient: "linear-gradient(135deg, #ffd700 0%, #a012f3 100%)",
+      category: "SOVEREIGN MATRIX"
     }
   ];
 
@@ -743,40 +997,10 @@ export default function App() {
     </div>
   );
 
-  // Simulated Push tickers bar at top
-  const renderTickerBar = () => (
-    <div className="ticker-top-bar">
-      <div className="ticker-top-left">
-        <span className="live-dot"></span>
-        <span className="ticker-live-txt">NEXORA INFRASTRUCTURE SECURITIES CLEARING INDEX BDT</span>
-      </div>
-      <div className="ticker-top-right">
-        {isAdmin ? (
-          <button className="admin-status-pill" onClick={handleAdminLogout} style={{ background: '#ef4444' }}>
-            <LogOut size={12} /> Disconnect Admin Terminal
-          </button>
-        ) : (
-          <button className="admin-status-pill" onClick={() => setShowAdminLogin(true)}>
-            <Shield size={12} /> Admin Access Gate
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // App Bottom navigation items list
-  const bottomNavItems = [
-    { id: 'dashboard', label: 'Home', icon: Zap },
-    { id: 'invest', label: 'Projects', icon: Layers },
-    { id: 'mining', label: 'Mining', icon: Cpu },
-    { id: 'team', label: 'Team', icon: Users },
-    { id: 'me', label: 'Me', icon: Settings }
-  ];
-
   return (
     <div className="app-layout-root">
       
-      {/* Ticker strip */}
+      {/* Top Index Ticker */}
       {renderTickerBar()}
 
       {/* Global Toast Alert */}
@@ -811,125 +1035,253 @@ export default function App() {
         </div>
       )}
 
-      {/* Split Workspace wrapper */}
-      <div className="workspace-wrapper">
-        
-        {/* Left Side: Desktop dashboard display / Landing info */}
-        <div className="desktop-viewport">
-          
-          <div className="desktop-header-row">
-            <div className="desktop-logo-wrap">
-              <div className="desktop-logo-box">
-                <Cpu size={24} style={{ color: 'var(--accent-green)' }} />
-              </div>
-              <div>
-                <h2>NEXORA GROUP</h2>
-                <span className="desktop-sub-logo">Bangladeshi Green Infrastructure Custodial</span>
-              </div>
+      {/* Navigation Headers (Desktop & Tablet) */}
+      {!landingMode && token && !isAdmin && (
+        <header className="desktop-app-header">
+          <div className="desktop-header-logo-block">
+            <div className="desktop-header-logo-box">
+              <Cpu size={20} style={{ color: 'var(--accent-green)' }} />
             </div>
-            <div className="desktop-nav-actions">
-              {landingMode ? (
-                <button className="btn-primary" onClick={() => setLandingMode(false)}>
-                  Access Workspace Terminal <ArrowUpRight size={16} />
-                </button>
-              ) : (
-                <>
-                  <button className="btn-secondary" onClick={() => setLandingMode(true)}>Platform Overview</button>
-                  {token && <button className="btn-logout" onClick={handleLogout}>Log Out</button>}
-                </>
-              )}
+            <div>
+              <h3>NEXORA</h3>
+              <span>Bangladeshi Infrastructure Leasing</span>
             </div>
           </div>
 
-          {/* Desktop Body workspace switcher */}
-          {isAdmin ? (
-            // Admin Panel
-            <div className="admin-panel-container">
-              {adminData ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                  <div className="admin-panel-header">
-                    <h3>Master Admin Clearing Console</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Manage balances, manually verify payment receipts, freeze account nodes.</p>
+          <nav className="desktop-header-nav">
+            {bottomNavItems.map(item => {
+              const Icon = item.icon;
+              return (
+                <button 
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`desktop-nav-link-btn ${activeTab === item.id ? 'active' : ''}`}
+                >
+                  <Icon size={16} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="desktop-header-user-status">
+            <div className="desktop-balance-indicators">
+              <div className="desktop-bal-pill dep">Deposit: ৳{user ? user.deposit_balance.toLocaleString() : '0'}</div>
+              <div className="desktop-bal-pill comm">Comm: ৳{user ? user.commission_balance.toLocaleString() : '0'}</div>
+              <div className="desktop-bal-pill active">Total: ৳{user ? user.total_balance.toLocaleString() : '0'}</div>
+            </div>
+            <button className="desktop-logout-icon-btn" onClick={handleLogout} title="Log Out">
+              <LogOut size={16} />
+            </button>
+          </div>
+        </header>
+      )}
+
+      {/* Main Body (Corporate Landing or Portal Dashboard) */}
+      <main className="main-content-scroller">
+        
+        {isAdmin ? (
+          // MASTER ADMIN DJANGO CONTROL PANEL
+          <div className="django-admin-wrapper" style={{ minHeight: 'calc(100vh - 38px)', background: '#f8f9fa', color: '#333', fontFamily: 'Roboto, Arial, sans-serif' }}>
+            {/* Django top header banner */}
+            <div style={{ background: '#124c3e', color: '#fff', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: '500', color: '#f5dd5d', letterSpacing: '0.5px', fontFamily: 'monospace' }}>
+                  Nexora Control Center - Django-Control Console
+                </h2>
+              </div>
+              <div style={{ fontSize: '12px', display: 'flex', gap: '15px', alignItems: 'center' }}>
+                <span>Welcome, <strong>administrator</strong>.</span>
+                <button onClick={handleAdminLogout} style={{ background: '#417690', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                  Log Out Control Panel
+                </button>
+              </div>
+            </div>
+
+            {/* Django Breadcrumb Bar */}
+            <div style={{ background: '#79aec8', color: '#fff', padding: '8px 24px', fontSize: '11px', fontWeight: '500' }}>
+              Home › Admin Operations › Verification desk
+            </div>
+
+            {adminData ? (
+              <div style={{ display: 'flex', gap: '20px', padding: '24px' }}>
+                
+                {/* Sidebar list models */}
+                <div style={{ width: '240px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden', flexShrink: 0 }}>
+                  <div style={{ background: '#79aec8', color: '#fff', padding: '10px 15px', fontSize: '12px', fontWeight: 'bold' }}>
+                    MODELS DIRECTORY
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Users Database</span>
+                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminData.users.length}</span>
+                    </div>
+                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Transactions Log</span>
+                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminData.pendingTransactions.length} Pending</span>
+                    </div>
+                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Task Proof Submissions</span>
+                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminTaskSubmissions.filter(t=>t.status==='pending').length} Pending</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main django content block */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                  
+                  {/* System stats */}
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', padding: '15px' }}>
+                    <h3 style={{ fontSize: '14px', borderBottom: '1px solid #eee', paddingBottom: '8px', color: '#666', fontWeight: 'bold' }}>SYSTEM HEALTH SUMMARY</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginTop: '12px', textAlign: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Total Clients</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>{adminData.summary.totalUsers}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Active Leases</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>{adminData.summary.activeContractsCount} Units</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Active Volume</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#124c3e' }}>${adminData.summary.activeVolume.toLocaleString()}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Approved Deposits</div>
+                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#26b99a' }}>${adminData.summary.depositsVolume.toLocaleString()}</div>
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Summary Metric Stats */}
-                  <div className="stats-metric-grid">
-                    <div className="stat-metric-card">
-                      <span>Total Clients</span>
-                      <h2>{adminData.summary.totalUsers} Accounts</h2>
+                  {/* System Parameters Settings */}
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#417690', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
+                      Change System Parameters Settings
                     </div>
-                    <div className="stat-metric-card">
-                      <span>Active Turbines Leased</span>
-                      <h2>{adminData.summary.activeContractsCount} Units</h2>
-                    </div>
-                    <div className="stat-metric-card">
-                      <span>Active Capital Volume</span>
-                      <h2 style={{ color: 'var(--accent-gold)' }}>৳{adminData.summary.activeVolume.toLocaleString()} BDT</h2>
-                    </div>
-                    <div className="stat-metric-card">
-                      <span>Approved Deposits</span>
-                      <h2 style={{ color: 'var(--accent-green)' }}>৳{adminData.summary.depositsVolume.toLocaleString()} BDT</h2>
-                    </div>
-                  </div>
-
-                  {/* Settings Control Block */}
-                  <div className="glass-card admin-settings-card">
-                    <h4>Global System Parameters</h4>
-                    <div className="admin-settings-row">
-                      <div className="admin-setting-item">
-                        <span>Global Freeze Switch:</span>
+                    <div style={{ padding: '15px', fontSize: '12px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <div>
+                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Global Freeze Switch:</label>
                         <button 
                           onClick={() => adminUpdateSettings({ global_freeze: adminData.settings.global_freeze === '1' ? '0' : '1' })}
-                          className={`admin-toggle-btn ${adminData.settings.global_freeze === '1' ? 'active-frozen' : 'active-ok'}`}
+                          style={{
+                            background: adminData.settings.global_freeze === '1' ? '#ba2121' : '#26b99a',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '4px 10px',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            fontWeight: 'bold'
+                          }}
                         >
                           {adminData.settings.global_freeze === '1' ? 'ACTIVE FREEZE (Withdrawals Locked)' : 'SYSTEM HEALTHY (Normal Operation)'}
                         </button>
                       </div>
-                      <div className="admin-setting-item">
-                        <span>Withdraw Fee %:</span>
-                        <input type="number" defaultValue={adminData.settings.withdrawal_fee_pct} onBlur={(e) => adminUpdateSettings({ withdrawal_fee_pct: e.target.value })} className="admin-val-input" style={{ width: '80px' }} />
+                      <div>
+                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Withdraw Fee %:</label>
+                        <input type="number" defaultValue={adminData.settings.withdrawal_fee_pct} onBlur={(e) => adminUpdateSettings({ withdrawal_fee_pct: e.target.value })} style={{ width: '60px', padding: '3px' }} />
                       </div>
-                      <div className="admin-setting-item">
-                        <span>Min Withdraw (৳):</span>
-                        <input type="number" defaultValue={adminData.settings.min_withdrawal_bdt} onBlur={(e) => adminUpdateSettings({ min_withdrawal_bdt: e.target.value })} className="admin-val-input" style={{ width: '100px' }} />
+                      <div>
+                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Min Withdraw ($):</label>
+                        <input type="number" defaultValue={adminData.settings.min_withdrawal_bdt} onBlur={(e) => adminUpdateSettings({ min_withdrawal_bdt: e.target.value })} style={{ width: '80px', padding: '3px' }} />
                       </div>
                     </div>
                   </div>
 
-                  {/* Pending Transactions queue */}
-                  <div className="glass-card">
-                    <h4>Pending Client Deposits & Withdraw Clearing Queue</h4>
-                    <div className="table-responsive">
-                      <table className="admin-data-table">
+                  {/* Task Submissions Module */}
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>SELECT TASK PROOF SUBMISSIONS TO APPROVE / REJECT</span>
+                    </div>
+                    <div style={{ padding: '10px', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
                         <thead>
-                          <tr>
-                            <th>Phone</th>
-                            <th>Type</th>
-                            <th>Amount</th>
-                            <th>Channel</th>
-                            <th>TrxID / Info</th>
-                            <th>Date</th>
-                            <th>Actions</th>
+                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
+                            <th style={{ padding: '8px' }}>User ID (Phone)</th>
+                            <th style={{ padding: '8px' }}>Lessor Tier Level</th>
+                            <th style={{ padding: '8px' }}>Task Name</th>
+                            <th style={{ padding: '8px' }}>View Proof Link</th>
+                            <th style={{ padding: '8px' }}>Date Submitted</th>
+                            <th style={{ padding: '8px' }}>Clearance Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {adminTaskSubmissions.length === 0 ? (
+                            <tr>
+                              <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No task proof submissions registered.</td>
+                            </tr>
+                          ) : (
+                            adminTaskSubmissions.map(ts => (
+                              <tr key={ts.id} style={{ borderBottom: '1px solid #eee' }}>
+                                <td style={{ padding: '8px' }}><strong>{ts.phone}</strong></td>
+                                <td style={{ padding: '8px' }}>VIP {ts.vip_level}</td>
+                                <td style={{ padding: '8px' }}>{ts.task_name}</td>
+                                <td style={{ padding: '8px' }}>
+                                  {ts.proof_image ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                      <a href={ts.proof_image} target="_blank" rel="noopener noreferrer" style={{ color: '#447e9b', fontWeight: 'bold' }}>
+                                        Open Proof Image File
+                                      </a>
+                                      <img src={ts.proof_image} alt="proof" style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc' }} />
+                                    </div>
+                                  ) : (
+                                    <span style={{ color: '#999' }}>No proof asset</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '8px' }}>{new Date(ts.created_at).toLocaleString()}</td>
+                                <td style={{ padding: '8px' }}>
+                                  {ts.status === 'pending' ? (
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                      <button onClick={() => adminVerifyTask(ts.id, 'approve')} style={{ background: '#26b99a', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Approve</button>
+                                      <button onClick={() => adminVerifyTask(ts.id, 'reject')} style={{ background: '#ba2121', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Reject</button>
+                                    </div>
+                                  ) : (
+                                    <span style={{ fontWeight: 'bold', color: ts.status === 'approved' ? '#26b99a' : '#ba2121', textTransform: 'capitalize' }}>{ts.status}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Pending Transactions queue */}
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
+                      PENDING DEPOSITS & WITHDRAWALS ACTIONS CLEARING QUEUE
+                    </div>
+                    <div style={{ padding: '10px', overflowX: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
+                            <th style={{ padding: '8px' }}>Phone</th>
+                            <th style={{ padding: '8px' }}>Type</th>
+                            <th style={{ padding: '8px' }}>Amount</th>
+                            <th style={{ padding: '8px' }}>Channel</th>
+                            <th style={{ padding: '8px' }}>TrxID / Info</th>
+                            <th style={{ padding: '8px' }}>Date</th>
+                            <th style={{ padding: '8px' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {adminData.pendingTransactions.length === 0 ? (
                             <tr>
-                              <td colSpan="7" style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-muted)' }}>Clearing queue is empty. No actions required.</td>
+                              <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Deposit/Withdrawal clearing queue is empty.</td>
                             </tr>
                           ) : (
                             adminData.pendingTransactions.map(tx => (
-                              <tr key={tx.id}>
-                                <td><strong>{tx.phone}</strong></td>
-                                <td><span className={`badge ${tx.type === 'deposit' ? 'badge-green' : 'badge-red'}`}>{tx.type.toUpperCase()}</span></td>
-                                <td style={{ fontWeight: 700 }}>৳{tx.amount}</td>
-                                <td>{tx.channel}</td>
-                                <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{tx.trx_id || tx.details}</td>
-                                <td>{new Date(tx.created_at).toLocaleString()}</td>
-                                <td>
+                              <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
+                                <td style={{ padding: '8px' }}><strong>{tx.phone}</strong></td>
+                                <td style={{ padding: '8px' }}><span style={{ background: tx.type === 'deposit' ? '#26b99a' : '#ba2121', color: '#fff', padding: '2px 6px', borderRadius: '3px', fontWeight: 'bold', fontSize: '9px' }}>{tx.type.toUpperCase()}</span></td>
+                                <td style={{ padding: '8px', fontWeight: 'bold' }}>${tx.amount.toFixed(2)}</td>
+                                <td style={{ padding: '8px' }}>{tx.channel}</td>
+                                <td style={{ padding: '8px', fontFamily: 'monospace' }}>{tx.trx_id || tx.details}</td>
+                                <td style={{ padding: '8px' }}>{new Date(tx.created_at).toLocaleString()}</td>
+                                <td style={{ padding: '8px' }}>
                                   <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={() => adminApproveTx(tx.id)} className="admin-act-approve">Approve</button>
-                                    <button onClick={() => adminRejectTx(tx.id)} className="admin-act-reject">Reject</button>
+                                    <button onClick={() => adminApproveTx(tx.id)} style={{ background: '#26b99a', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Approve</button>
+                                    <button onClick={() => adminRejectTx(tx.id)} style={{ background: '#ba2121', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Reject</button>
                                   </div>
                                 </td>
                               </tr>
@@ -940,44 +1292,56 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Accounts management list */}
-                  <div className="glass-card">
-                    <h4>Client Registry Node Balance Editor</h4>
-                    <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                      <table className="admin-data-table">
+                  {/* Users database management */}
+                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
+                      CLIENT REGISTRY ACCOUNTS MANAGEMENT & FREEZING DESK
+                    </div>
+                    <div style={{ padding: '10px', overflowX: 'auto', maxHeight: '350px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
                         <thead>
-                          <tr>
-                            <th>Phone</th>
-                            <th>IP Address</th>
-                            <th>Earnings Bal</th>
-                            <th>Deposit Bal</th>
-                            <th>Commission Bal</th>
-                            <th>Status</th>
-                            <th>Adjust Wallet / Freezing</th>
+                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
+                            <th style={{ padding: '8px' }}>Phone</th>
+                            <th style={{ padding: '8px' }}>IP Node</th>
+                            <th style={{ padding: '8px' }}>Total Bal</th>
+                            <th style={{ padding: '8px' }}>Deposit Bal</th>
+                            <th style={{ padding: '8px' }}>Comm Bal</th>
+                            <th style={{ padding: '8px' }}>Status</th>
+                            <th style={{ padding: '8px' }}>Adjust Ledger / Freezing Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {adminData.users.map(u => (
-                            <tr key={u.id}>
-                              <td>{u.phone}</td>
-                              <td>{u.created_ip}</td>
-                              <td>৳{u.balance}</td>
-                              <td>৳{u.deposit_balance}</td>
-                              <td>৳{u.commission_balance}</td>
-                              <td><span className={`badge ${u.status === 'frozen' ? 'badge-red' : 'badge-green'}`}>{u.status}</span></td>
-                              <td>
+                            <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
+                              <td style={{ padding: '8px' }}><strong>{u.phone}</strong></td>
+                              <td style={{ padding: '8px', color: '#777' }}>{u.created_ip || '127.0.0.1'}</td>
+                              <td style={{ padding: '8px' }}>${u.total_balance.toFixed(2)}</td>
+                              <td style={{ padding: '8px', color: '#26b99a', fontWeight: 'bold' }}>${u.deposit_balance.toFixed(2)}</td>
+                              <td style={{ padding: '8px', color: '#ff9100', fontWeight: 'bold' }}>${u.commission_balance.toFixed(2)}</td>
+                              <td style={{ padding: '8px' }}><span style={{ color: u.status === 'frozen' ? '#ba2121' : '#26b99a', fontWeight: 'bold' }}>{u.status.toUpperCase()}</span></td>
+                              <td style={{ padding: '8px' }}>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                   <input 
                                     type="number" 
-                                    placeholder="Set Bal"
+                                    placeholder="Set Total Bal"
                                     onBlur={(e) => {
                                       if (e.target.value !== '') adminEditUserBalance(u.id, e.target.value);
                                     }} 
-                                    className="admin-val-input"
-                                    style={{ width: '80px', padding: '4px' }}
+                                    style={{ width: '100px', padding: '3px', border: '1px solid #ccc', borderRadius: '3px' }}
                                   />
-                                  <button onClick={() => adminToggleUserFreeze(u.id, u.status)} className={`admin-freeze-btn ${u.status === 'frozen' ? 'frozen-active' : 'frozen-inactive'}`}>
-                                    {u.status === 'frozen' ? 'Unfreeze' : 'Freeze'}
+                                  <button 
+                                    onClick={() => adminToggleUserFreeze(u.id, u.status)} 
+                                    style={{
+                                      background: u.status === 'frozen' ? '#26b99a' : '#ba2121',
+                                      color: '#fff',
+                                      border: 'none',
+                                      padding: '4px 8px',
+                                      borderRadius: '3px',
+                                      cursor: 'pointer',
+                                      fontWeight: 'bold'
+                                    }}
+                                  >
+                                    {u.status === 'frozen' ? 'Unfreeze Account' : 'Freeze Account'}
                                   </button>
                                 </div>
                               </td>
@@ -987,147 +1351,443 @@ export default function App() {
                       </table>
                     </div>
                   </div>
+
                 </div>
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '50px 0', color: '#999', fontSize: '13px' }}>Decrypting Admin Control Records...</div>
+            )}
+          </div>
+        ) : landingMode ? (
+          // CORPORATE LANDING PAGE (Unauthenticated Homepage)
+          <div className="landing-layout-body">
+            <div className="desktop-header-row max-width-container">
+              <div className="desktop-logo-wrap">
+                <div className="desktop-logo-box">
+                  <Cpu size={24} style={{ color: 'var(--accent-green)' }} />
+                </div>
+                <div>
+                  <h2>NEXORA</h2>
+                  <span className="desktop-sub-logo">Clean Energy & Commodities Custodial</span>
+                </div>
+              </div>
+              <div className="desktop-nav-actions">
+                <button className="btn-primary" onClick={() => setLandingMode(false)}>
+                  Access Workspace Terminal <ArrowUpRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="landing-hero-section max-width-container">
+              <span className="hero-alert-badge"><Shield size={12} /> SECURED & CERTIFIED ASSET LEASES • GRADE AAA</span>
+              <h1>Lease Infrastructure. <br /><span className="hero-gradient-text">Harvest Daily Cash yields.</span></h1>
+              <p>Nexora connects private investment capital directly to physical power nodes and chemical refineries in Bangladesh. Lease utility-scale clean solar grid modules, vertical wind turbines, agricultural biomass reactors, or bullion processors. 180-day fixed lockups with instant daily ROI payout clearance.</p>
+              
+              <div className="hero-actions-row">
+                <button className="btn-primary" onClick={() => setLandingMode(false)}>
+                  Access Workspace Terminal <ArrowUpRight size={16} />
+                </button>
+                <button className="btn-secondary" onClick={() => {
+                  const el = document.getElementById('landing-projects');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }}>
+                  Explore Leases Tiers
+                </button>
+              </div>
+            </div>
+
+            {/* Core Stats Overview */}
+            <div className="stats-metric-grid max-width-container" style={{ margin: '40px auto' }}>
+              <div className="stat-metric-card">
+                <span>Total Assets Active</span>
+                <h2>2,450 Units</h2>
+              </div>
+              <div className="stat-metric-card">
+                <span>Bangladesh Grid Synced</span>
+                <h2>99.98% Healthy</h2>
+              </div>
+              <div className="stat-metric-card">
+                <span>Leased Volume</span>
+                <h2 style={{ color: 'var(--accent-gold)' }}>৳24,500,000</h2>
+              </div>
+            </div>
+
+            {/* Projects Overview */}
+            <div id="landing-projects" className="landing-projects-section max-width-container">
+              <h3 className="section-title">Verified Green Infrastructures Open for Leases</h3>
+              <div className="projects-grid">
+                {LEASE_PROJECTS.map(proj => (
+                  <div key={proj.id} className="glass-card project-card-wrap">
+                    <div className="card-top-header">
+                      <span className="category-badge">{proj.category}</span>
+                      <h4>{proj.name}</h4>
+                    </div>
+                    <p className="project-desc">{proj.description}</p>
+                    <div className="project-financial-ledger">
+                      <div className="ledger-item">
+                        <span>Lease cost:</span>
+                        <strong>৳{proj.price.toLocaleString()} BDT</strong>
+                      </div>
+                      <div className="ledger-item">
+                        <span>Daily harvest yield:</span>
+                        <strong style={{ color: 'var(--accent-green)' }}>+৳{proj.dailyProfit.toLocaleString()} BDT/day</strong>
+                      </div>
+                      <div className="ledger-item">
+                        <span>Lock-in duration:</span>
+                        <span>{proj.duration} Days</span>
+                      </div>
+                      <div className="ledger-item" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                        <span>Total contract return:</span>
+                        <strong style={{ color: 'var(--accent-gold)' }}>৳{proj.totalProfit.toLocaleString()} BDT</strong>
+                      </div>
+                    </div>
+                    <button className="btn-secondary" style={{ width: '100%', marginTop: '10px' }} onClick={() => setLandingMode(false)}>Sign Lease Agreement</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : !token ? (
+          // USER LOGIN/SIGNUP CARD (Full-screen viewport layout)
+          <div className="auth-fullscreen-container">
+            <div className="auth-box-wrap glass-card">
+              <div className="phone-auth-header">
+                <h2 className="glowing-text">NEXORA</h2>
+                <span>Clean Energy Infrastructure Custodial</span>
+              </div>
+
+              {isRegistering ? (
+                <form onSubmit={handleSignup} className="phone-auth-form">
+                  <h4>Create Client Account Node</h4>
+                  <div className="auth-input-group">
+                    <label>Registered Mobile Number</label>
+                    <input type="text" placeholder="e.g. +8801700000010" value={signupForm.phone} onChange={e => setSignupForm({...signupForm, phone: e.target.value})} className="glass-input" required />
+                    <span>Bangladesh phone prefix code (+880) required</span>
+                  </div>
+                  <div className="auth-input-group">
+                    <label>Secure Password Key</label>
+                    <input type="password" placeholder="••••••••" value={signupForm.password} onChange={e => setSignupForm({...signupForm, password: e.target.value})} className="glass-input" required />
+                  </div>
+                  <div className="auth-input-group">
+                    <label>Upline Referral Code (Optional)</label>
+                    <input type="text" placeholder="e.g. NEX-XXXX-XXX" value={signupForm.referredByCode} onChange={e => setSignupForm({...signupForm, referredByCode: e.target.value})} className="glass-input" />
+                  </div>
+                  <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Register Account Node</button>
+                  <div className="auth-toggle-row">
+                    <span>Already registered?</span>
+                    <span onClick={() => setIsRegistering(false)} style={{ color: 'var(--accent-green)', fontWeight: 'bold', cursor: 'pointer' }}>Sign In</span>
+                  </div>
+                </form>
               ) : (
-                <div style={{ textAlign: 'center', padding: '50px 0', color: 'var(--text-muted)' }}>Decrypting Admin Clearing Records...</div>
+                <form onSubmit={handleLogin} className="phone-auth-form">
+                  <h4>Authenticate Account Node</h4>
+                  <div className="auth-input-group">
+                    <label>Registered Phone</label>
+                    <input type="text" placeholder="e.g. +8801700000010" value={loginForm.phone} onChange={e => setLoginForm({...loginForm, phone: e.target.value})} className="glass-input" required />
+                  </div>
+                  <div className="auth-input-group">
+                    <label>Account Password</label>
+                    <input type="password" placeholder="••••••••" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="glass-input" required />
+                  </div>
+                  <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>Connect Node</button>
+                  <div className="auth-toggle-row">
+                    <span>New client investor?</span>
+                    <span onClick={() => setIsRegistering(true)} style={{ color: 'var(--accent-green)', fontWeight: 'bold', cursor: 'pointer' }}>Register Node</span>
+                  </div>
+                </form>
               )}
             </div>
-          ) : landingMode ? (
-            // Landing Mode (Introductory layout explaining Nexora)
-            <div className="landing-layout-body">
-              <div className="landing-hero-section">
-                <span className="hero-alert-badge"><Shield size={12} /> BANGLADESH RENEWABLE UTILITY CUSTODY CERTIFIED GRADE-A</span>
-                <h1>Secure Physical Clean Power Assets. <span className="hero-gradient-text">Harvest BDT Daily.</span></h1>
-                <p>Nexora connects private investment capital directly to physical infrastructure leases. Fund utility solar grids, wind turbines, biomass energy plants, or refinery operations in Bangladesh. Audited flat returns with instant automated clearances.</p>
-                <div className="hero-actions-row">
-                  <button className="btn-primary" onClick={() => setLandingMode(false)}>Access Workspace Terminal <ArrowUpRight size={16} /></button>
-                  <button className="btn-secondary" onClick={() => {
-                    const el = document.getElementById('landing-projects');
-                    if (el) el.scrollIntoView({ behavior: 'smooth' });
-                  }}>Review Lease Projects</button>
-                </div>
+          </div>
+        ) : (
+          // USER PORTAL DASHBOARD (Authenticated)
+          <div className="portal-container max-width-container">
+            
+            {/* Mobile-Only Header status */}
+            <div className="mobile-only-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 24px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', height: '56px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', color: '#fff', letterSpacing: '0.5px' }}>NEXORA</h3>
+                <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Green Grid Custody</span>
               </div>
-
-              {/* Tiers display */}
-              <div id="landing-projects" className="landing-projects-section">
-                <h3 className="section-title">Verified Green Infrastructure Projects Open for Leases</h3>
-                <div className="projects-grid">
-                  {LEASE_PROJECTS.map(proj => (
-                    <div key={proj.id} className="glass-card project-card-wrap">
-                      <div className="card-top-header">
-                        <span className="category-badge">{proj.category}</span>
-                        <h4>{proj.name}</h4>
-                      </div>
-                      <p className="project-desc">{proj.description}</p>
-                      <div className="project-financial-ledger">
-                        <div className="ledger-item">
-                          <span>Purchase lease:</span>
-                          <strong>৳{proj.price.toLocaleString()} BDT</strong>
-                        </div>
-                        <div className="ledger-item">
-                          <span>Daily harvest ROI:</span>
-                          <strong style={{ color: 'var(--accent-green)' }}>+৳{proj.dailyProfit.toLocaleString()} BDT/day</strong>
-                        </div>
-                        <div className="ledger-item">
-                          <span>Lock-in duration:</span>
-                          <span>{proj.duration} Days</span>
-                        </div>
-                        <div className="ledger-item" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
-                          <span>Total estimated return:</span>
-                          <strong style={{ color: 'var(--accent-gold)' }}>৳{proj.totalProfit.toLocaleString()} BDT</strong>
-                        </div>
-                      </div>
-                      <button className="btn-secondary" style={{ width: '100%', marginTop: '10px' }} onClick={() => setLandingMode(false)}>Sign Lease Agreement</button>
-                    </div>
-                  ))}
-                </div>
+              <div className="header-balance-pill" onClick={() => setActiveTab('me')} style={{ background: 'var(--accent-green-glow)', border: '1px solid rgba(0, 230, 118, 0.2)', padding: '5px 12px', borderRadius: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>$</span>
+                <strong style={{ color: '#fff', fontSize: '13px' }}>{user ? user.total_balance.toFixed(2) : '0.00'}</strong>
               </div>
             </div>
-          ) : (
-            // User Workspace overview (Shows dashboard synced values)
-            <div className="desktop-workspace-body">
-              <div className="workspace-welcome-box">
-                <div>
-                  <h3>Platform Workspace Terminal</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Synchronized real-time simulation screen. Use the mobile APK layout on the right to navigate the 5 menus.</p>
-                </div>
-                <div className="workspace-user-badge">
-                  <span className="live-dot"></span>
-                  <span>Node: {user ? user.phone : 'Not Connected'}</span>
-                </div>
-              </div>
 
-              <div className="desktop-overview-grid">
+            {/* TAB 1: HOME (dashboard) */}
+            {activeTab === 'dashboard' && (
+              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 
-                {/* 3 Wallet Card */}
-                <div className="glass-card triple-wallet-display-desktop">
-                  <h4>Triple Wallet Architecture Balance Indicators</h4>
-                  <div className="wallet-cards-desktop-row">
-                    <div className="wallet-card-sub active-total">
-                      <span>Total Balance (Combined available)</span>
-                      <h2>৳{user ? user.total_balance.toLocaleString() : '0.00'}</h2>
-                    </div>
-                    <div className="wallet-card-sub active-deposit">
-                      <span>Deposit Wallet (Loaded capital)</span>
-                      <h2>৳{user ? user.deposit_balance.toLocaleString() : '0.00'}</h2>
-                    </div>
-                    <div className="wallet-card-sub active-commission">
-                      <span>Commission Wallet (Claimed affiliate)</span>
-                      <h2>৳{user ? user.commission_balance.toLocaleString() : '0.00'}</h2>
-                    </div>
+                {/* High-quality sliding banners */}
+                <div className="banner-container">
+                  <div className="banner-track" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
+                    {[
+                      { img: energyBanner, label: "RENEWABLE SOLAR GRID UNITS", title: "Fund Solar Power Arrays", desc: "Lease solar power cells generating USD yields daily." },
+                      { img: refineryBanner, label: "BATTERY MINERALS REFINERS", title: "Lithium Reactor Unit Leases", desc: "Lease high-efficiency minerals refining reactors." },
+                      { img: metalsBanner, label: "PRECIOUS METALS CUSTODY", title: "Rent Gold refining pipelines", desc: "Rental structures backed by certified bullion custody deeds." }
+                    ].map((slide, idx) => (
+                      <div key={idx} className="banner-slide" style={{ backgroundImage: `url(${slide.img})` }}>
+                        <div className="banner-overlay"></div>
+                        <div className="banner-content">
+                          <span className="banner-pretitle">{slide.label}</span>
+                          <h4 className="banner-title">{slide.title}</h4>
+                          <span className="banner-desc">{slide.desc}</span>
+                          <button className="banner-btn" onClick={() => setActiveTab('invest')}>Lease Asset Unit <ArrowUpRight size={10} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="banner-dots">
+                    {[0, 1, 2].map(idx => (
+                      <div key={idx} className={`banner-dot ${currentSlide === idx ? 'active' : ''}`} onClick={() => setCurrentSlide(idx)}></div>
+                    ))}
                   </div>
                 </div>
 
-                {/* Left col: active contracts */}
-                <div className="glass-card">
-                  <h4>Your Funded Infrastructure Leases</h4>
-                  <div className="table-responsive" style={{ marginTop: '15px' }}>
-                    <table className="client-contracts-table" style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse', textAlign: 'left' }}>
-                      <thead>
-                        <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                          <th style={{ padding: '10px 0' }}>Project Node</th>
-                          <th>Lease Cost</th>
-                          <th>Daily Profit Yield</th>
-                          <th>Lease timeline</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {contracts.length === 0 ? (
-                          <tr>
-                            <td colSpan="5" style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)' }}>No active infrastructure leases found. Lease a project tier from the Projects tab.</td>
+                {/* Scrolling marquee ticker (USD based payouts) */}
+                <div className="marquee-wrapper">
+                  <div className="marquee-content">
+                    {[
+                      "User +88017****2311 withdrew $14.00 via bKash Mobile!",
+                      "User +88019****9908 leased Nexora Eco-Mini Grid for $10.00!",
+                      "User +88015****3829 withdrew $225.00 successfully via Nagad Mobile!",
+                      "User +88016****0023 leased Nexora Biomass Power Plant for $1,000.00!",
+                      "User +88018****4567 withdrew $62.00 via Rocket Payout!",
+                      "User +88017****8899 leased Nexora Wind Farm Asset for $300.00!",
+                      "User +88013****1212 withdrew $5.50 via bKash!",
+                      "User +88017****5219 leased Nexora Gold Refinery Reserve for $10,000.00!"
+                    ].map((item, idx) => {
+                      const isWithdraw = item.includes("withdrew");
+                      return (
+                        <span key={idx} className="marquee-item">
+                          <span className="marquee-speaker">📢</span>
+                          <span className="marquee-text-main">
+                            {item.split(' ')[0]} {item.split(' ')[1]}{' '}
+                            <span style={{ color: isWithdraw ? '#ef4444' : 'var(--accent-green)', fontWeight: 'bold' }}>
+                              {isWithdraw ? "withdrew" : "leased"}
+                            </span>{' '}
+                            <span style={{ color: 'var(--accent-gold)', fontWeight: 800 }}>
+                              {item.split(' ').slice(3).join(' ')}
+                            </span>
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Desktop and Mobile Dual Grid layout for Home metrics */}
+                <div className="home-dashboard-grid">
+                  
+                  {/* Left Column: Quick Actions & Team Leader event info */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    
+                    {/* Quick actions 2x3 Grid */}
+                    <div className="quick-actions-2x3-grid">
+                      <button onClick={() => { setActiveTab('me'); setDepositModalOpen(true); }} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'var(--accent-green-glow)' }}><ArrowUpRight size={20} style={{ color: 'var(--accent-green)' }} /></div>
+                        <span>Deposit</span>
+                      </button>
+                      <button onClick={() => { setActiveTab('me'); setWithdrawModalOpen(true); }} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'var(--accent-gold-glow)' }}><ArrowDownLeft size={20} style={{ color: 'var(--accent-gold)' }} /></div>
+                        <span>Withdraw</span>
+                      </button>
+                      <button onClick={() => setMiningModalOpen(true)} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'var(--accent-green-glow)' }}><Zap size={20} style={{ color: 'var(--accent-green)' }} /></div>
+                        <span>Mining Engine</span>
+                      </button>
+                      <button onClick={() => setActiveTab('team')} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'var(--accent-blue-glow)' }}><Share2 size={20} style={{ color: 'var(--accent-blue)' }} /></div>
+                        <span>Invite Friends</span>
+                      </button>
+                      <button onClick={() => setShowPartnershipModal(true)} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'var(--accent-gold-glow)' }}><Handshake size={20} style={{ color: 'var(--accent-gold)' }} /></div>
+                        <span>Partnership</span>
+                      </button>
+                      <button onClick={() => setShowSupportModal(true)} className="quick-action-btn">
+                        <div className="btn-icon-wrap" style={{ background: 'rgba(239, 68, 68, 0.12)' }}><Headphones size={20} style={{ color: '#ef4444' }} /></div>
+                        <span>Support Desk</span>
+                      </button>
+                    </div>
+
+                    {/* Team Leader Event Promo card */}
+                    <div className="team-leader-event-card">
+                      <div className="team-leader-header">
+                        <div>
+                          <span className="leader-pill">CAREER COMMISSIONS ROADMAP</span>
+                          <h4>Become a Nexora Official Team Leader!</h4>
+                        </div>
+                        <div className="leader-icon-badge"><Award size={24} style={{ color: 'var(--accent-gold)' }} /></div>
+                      </div>
+                      <p>Build a local community leasing group. Expand active downlines to unlock official agent contracts providing fixed monthly salary payments.</p>
+                      
+                      <div className="leader-rewards-row">
+                        <div className="reward-item">
+                          <span className="rank-name bronce">Bronze Leader</span>
+                          <strong>$100.00 / mo</strong>
+                        </div>
+                        <div className="reward-item">
+                          <span className="rank-name silver">Silver Leader</span>
+                          <strong>$300.00 / mo</strong>
+                        </div>
+                        <div className="reward-item">
+                          <span className="rank-name gold">Gold Leader</span>
+                          <strong>$600.00 / mo</strong>
+                        </div>
+                        <div className="reward-item">
+                          <span className="rank-name diamond">Diamond Leader</span>
+                          <strong>$1,000.00 / mo</strong>
+                        </div>
+                      </div>
+                      <button className="leader-learn-more-btn" onClick={() => setShowPartnershipModal(true)}>
+                        Review Official Terms & Rules <ArrowUpRight size={12} />
+                      </button>
+                    </div>
+
+                    {/* Team Leader Event Milestones */}
+                    <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <h4 style={{ color: 'var(--accent-gold)' }}>Daily Referral Leader Event Milestones</h4>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Recruit active downlines who make a deposit today to claim bonus spendable rewards.</p>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {[
+                          { id: 'leader_milestone_1', target: 2, reward: 2.00, title: "Bronze Recruiter Milestone" },
+                          { id: 'leader_milestone_2', target: 5, reward: 7.00, title: "Silver Recruiter Milestone" },
+                          { id: 'leader_milestone_3', target: 10, reward: 20.00, title: "Gold Recruiter Milestone" }
+                        ].map(m => {
+                          const progress = user ? user.stats.todayReferralsWithDeposit : 0;
+                          const pct = Math.min(100, (progress / m.target) * 100);
+                          const claimed = user && user.claimed_milestones ? user.claimed_milestones.split(',') : [];
+                          const isClaimed = claimed.includes(m.id);
+                          const canClaim = progress >= m.target && !isClaimed;
+                          return (
+                            <div key={m.id} style={{ background: 'rgba(255,255,255,0.015)', border: '1px solid var(--border-color)', padding: '10px 14px', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                <strong>{m.title} (Invite {m.target})</strong>
+                                <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>Reward: +${m.reward.toFixed(2)}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ flex: 1, height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
+                                  <div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-green) 0%, var(--accent-blue) 100%)' }}></div>
+                                </div>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{progress}/{m.target}</span>
+                              </div>
+                              <button 
+                                onClick={() => claimLeaderMilestone(m.id)}
+                                disabled={!canClaim}
+                                style={{
+                                  background: isClaimed ? 'var(--bg-tertiary)' : canClaim ? 'linear-gradient(135deg, var(--accent-green) 0%, var(--accent-blue) 100%)' : 'rgba(255,255,255,0.02)',
+                                  color: isClaimed ? 'var(--text-muted)' : canClaim ? '#000' : 'var(--text-muted)',
+                                  border: '1px solid var(--border-color)',
+                                  padding: '6px',
+                                  fontSize: '11px',
+                                  fontWeight: 'bold',
+                                  borderRadius: '4px',
+                                  cursor: canClaim ? 'pointer' : 'default',
+                                  textAlign: 'center',
+                                  marginTop: '3px'
+                                }}
+                              >
+                                {isClaimed ? "Claimed" : canClaim ? "Claim Reward" : "Incomplete"}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Active contracts summary list with Accrued Rolling Ticker */}
+                  <div className="glass-card home-active-leases-block">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                      <h4>Your Funded Infrastructure Leases</h4>
+                      <span className="badge badge-green">GRID SYNCED ACTIVE</span>
+                    </div>
+
+                    <div className="table-responsive">
+                      <table className="client-contracts-table" style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <th style={{ padding: '8px 0' }}>Project Node</th>
+                            <th>Lease Cost</th>
+                            <th>Accrued Yield (Live)</th>
+                            <th>Timeline</th>
+                            <th>Collect</th>
                           </tr>
-                        ) : (
-                          contracts.map(c => (
-                            <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                              <td style={{ padding: '12px 0', fontWeight: 600 }}>{c.tier_name}</td>
-                              <td>৳{c.price.toLocaleString()} BDT</td>
-                              <td style={{ color: 'var(--accent-green)' }}>+৳{(c.price * c.daily_roi).toLocaleString()} BDT/day</td>
-                              <td>{c.days_elapsed} / {c.duration_days} Days elapsed</td>
-                              <td>
-                                <span className={`badge ${c.status === 'active' ? 'badge-green' : 'badge-gray'}`}>
-                                  {c.status.toUpperCase()}
-                                </span>
+                        </thead>
+                        <tbody>
+                          {contracts.length === 0 ? (
+                            <tr>
+                              <td colSpan="5" style={{ padding: '30px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                No active leases. Fund an infrastructure grid from the Projects tab.
                               </td>
                             </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+                          ) : (
+                            contracts.map(c => {
+                              const isClaimedToday = c.last_claimed_at && 
+                                new Date(c.last_claimed_at).toDateString() === new Date().toDateString();
+                              
+                              // Calculate rolling accrued profit
+                              const getAccruedProfit = (contract) => {
+                                const startDate = contract.last_claimed_at ? new Date(contract.last_claimed_at) : new Date(contract.created_at);
+                                const now = new Date();
+                                const elapsedSeconds = Math.max(0, Math.floor((now - startDate) / 1000));
+                                const dailyEarning = contract.price * contract.daily_roi;
+                                const perSecondRate = dailyEarning / 86400;
+                                const accrued = elapsedSeconds * perSecondRate;
+                                return accrued.toFixed(6);
+                              };
+
+                              return (
+                                <tr key={c.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                                  <td style={{ padding: '10px 0', fontWeight: 600 }}>{c.tier_name}</td>
+                                  <td>${c.price.toLocaleString()}</td>
+                                  <td style={{ color: 'var(--accent-green)', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                                    {isClaimedToday ? (
+                                      <span>+$0.000000 (Claimed)</span>
+                                    ) : (
+                                      <span className="accrued-live-glowing-number">${getAccruedProfit(c)}</span>
+                                    )}
+                                  </td>
+                                  <td>{c.days_elapsed} / {c.duration_days} Days</td>
+                                  <td>
+                                    {c.status === 'completed' ? (
+                                      <span className="badge badge-gray">COMPLETED</span>
+                                    ) : isClaimedToday ? (
+                                      <span className="badge badge-green">SYNCED</span>
+                                    ) : (
+                                      <button 
+                                        onClick={() => setMiningModalOpen(true)} 
+                                        className="admin-act-approve" 
+                                        style={{ fontSize: '10px', padding: '3px 6px' }}
+                                      >
+                                        Sync
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
+
                 </div>
 
-                {/* Right col: live telecasts */}
+                {/* Bottom live telegram alerts list */}
                 <div className="glass-card">
-                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-gold)' }}>
-                    <Send size={14} /> Live Platform Telegram Telecast Feeds
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-gold)', fontSize: '13px' }}>
+                    <Send size={14} /> Live Official Telegram Verification Telecasts
                   </h4>
-                  <div className="live-telecast-scroller" style={{ maxHeight: '180px', overflowY: 'auto', marginTop: '15px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="live-telecast-scroller" style={{ maxHeight: '120px', overflowY: 'auto', marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {telegramFeed.length === 0 ? (
                       <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Awaiting feed telemetry signals...</span>
                     ) : (
                       telegramFeed.map(feed => (
-                        <div key={feed.id} className="telecast-item-row" style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                        <div key={feed.id} className="telecast-item-row" style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.015)', padding: '6px 10px', borderRadius: '4px', fontSize: '12px' }}>
                           <span style={{ color: 'var(--text-main)' }}>{feed.text}</span>
                           <span style={{ color: 'var(--text-muted)' }}>{new Date(feed.timestamp).toLocaleTimeString()}</span>
                         </div>
@@ -1137,599 +1797,478 @@ export default function App() {
                 </div>
 
               </div>
-            </div>
-          )}
+            )}
 
-        </div>
+            {/* TAB 2: PROJECTS (Leasing Shop) */}
+            {activeTab === 'invest' && (
+              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="projects-tab-header">
+                  <h3>Infrastructure Lease Shop</h3>
+                  <p style={{ color: 'var(--text-muted)' }}>Rent fractional clean power nodes or metal refinery reactors. All contracts have a fixed 180-day lock-in period with daily ROI harvest clearance. All returns are flat USD values.</p>
+                </div>
 
-        {/* Right Side: Simulated mobile device (Android emulator) */}
-        <div className="mobile-emulator-viewport">
-          <div className="phone-mockup">
-            
-            {/* Speaker Notch */}
-            <div className="phone-bezel-notch"></div>
-            
-            {/* Phone Status Bar */}
-            <div className="phone-status-bar">
-              <span>9:41</span>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <TrendingUpIcon size={10} style={{ color: 'var(--accent-green)' }} />
-                <span>Nexora Net 4G</span>
-                <span style={{ fontWeight: 'bold' }}>100%</span>
+                {/* Grid list of projects */}
+                <div className="projects-grid">
+                  {LEASE_PROJECTS.map(proj => (
+                    <div key={proj.id} className="glass-card project-card-wrap" style={{ borderTop: `4px solid ${proj.id === 'gold_reserve' || proj.id === 'energy_matrix' ? 'var(--accent-gold)' : 'var(--accent-green)'}` }}>
+                      <div className="card-top-header">
+                        <span className="category-badge">{proj.category}</span>
+                        <h4>{proj.name}</h4>
+                      </div>
+                      <p className="project-desc">{proj.description}</p>
+                      
+                      <div className="project-financial-ledger">
+                        <div className="ledger-item">
+                          <span>Purchase Lease Cost:</span>
+                          <strong>${proj.price.toLocaleString()}</strong>
+                        </div>
+                        <div className="ledger-item">
+                          <span>Daily Profit return:</span>
+                          <strong style={{ color: 'var(--accent-green)' }}>+${proj.dailyProfit.toLocaleString()}/day</strong>
+                        </div>
+                        <div className="ledger-item">
+                          <span>Lock-in Duration:</span>
+                          <span>180 Days</span>
+                        </div>
+                        <div className="ledger-item" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
+                          <span>Total estimated return:</span>
+                          <strong style={{ color: 'var(--accent-gold)' }}>${proj.totalProfit.toLocaleString()}</strong>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => setSelectedAgreementProject(proj)} 
+                        className="btn-primary" 
+                        style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
+                      >
+                        Sign Agreement & Lease
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Phone Screen App Container */}
-            <div className="phone-screen">
-              
-              {!token ? (
-                // Sign In / Register viewport on mobile phone mockup
-                <div className="phone-auth-wrapper">
-                  <div className="phone-auth-header">
-                    <h2 className="glowing-text">NEXORA</h2>
-                    <span>Green Utility Custody</span>
-                  </div>
-
-                  <div className="phone-auth-form-card">
-                    {isRegistering ? (
-                      <form onSubmit={handleSignup} className="phone-auth-form">
-                        <h4>Create Client Node Account</h4>
-                        <div className="auth-input-group">
-                          <input type="text" placeholder="Phone (e.g. +8801700000010)" value={signupForm.phone} onChange={e => setSignupForm({...signupForm, phone: e.target.value})} className="phone-glass-input" required />
-                          <span>Must prefix with regional code (+880)</span>
-                        </div>
-                        <div className="auth-input-group">
-                          <input type="password" placeholder="Access Password" value={signupForm.password} onChange={e => setSignupForm({...signupForm, password: e.target.value})} className="phone-glass-input" required />
-                        </div>
-                        <div className="auth-input-group">
-                          <input type="text" placeholder="Referral Code (Optional)" value={signupForm.referredByCode} onChange={e => setSignupForm({...signupForm, referredByCode: e.target.value})} className="phone-glass-input" />
-                        </div>
-                        <button type="submit" className="phone-btn-primary">Register Account Node</button>
-                        <div className="auth-toggle-row">
-                          <span>Already a client?</span>
-                          <span onClick={() => setIsRegistering(false)} style={{ color: 'var(--accent-green)', fontWeight: 'bold', cursor: 'pointer' }}>Sign In</span>
-                        </div>
-                      </form>
-                    ) : (
-                      <form onSubmit={handleLogin} className="phone-auth-form">
-                        <h4>Authenticate Client Node</h4>
-                        <div className="auth-input-group">
-                          <input type="text" placeholder="Registered Phone" value={loginForm.phone} onChange={e => setLoginForm({...loginForm, phone: e.target.value})} className="phone-glass-input" required />
-                        </div>
-                        <div className="auth-input-group">
-                          <input type="password" placeholder="Password Key" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="phone-glass-input" required />
-                        </div>
-                        <button type="submit" className="phone-btn-primary">Connect Node</button>
-                        <div className="auth-toggle-row">
-                          <span>New to Nexora?</span>
-                          <span onClick={() => setIsRegistering(true)} style={{ color: 'var(--accent-green)', fontWeight: 'bold', cursor: 'pointer' }}>Register</span>
-                        </div>
-                      </form>
-                    )}
-                  </div>
+            {/* TAB 3: TASKS (Daily tasks, screenshot upload and attendance) */}
+            {activeTab === 'tasks' && (
+              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                <div className="projects-tab-header">
+                  <h3>Lessor Task Rewards Terminal</h3>
+                  <p style={{ color: 'var(--text-muted)' }}>Perform grid synchronization and social promotion actions to earn additional spendable credits directly into your wallet.</p>
                 </div>
-              ) : (
-                // Logged In App Interface
-                <div className="phone-app-container">
+
+                <div className="home-dashboard-grid">
                   
-                  {/* Phone Header Logo/Balance strip */}
-                  <div className="phone-app-header">
-                    <div>
-                      <h3 className="app-main-title">NEXORA</h3>
-                      <span className="app-sub-title">SECURED COMMODITIES LEASING</span>
-                    </div>
-                    <div className="header-balance-pill" onClick={() => setMobileTab('me')}>
-                      <span>৳</span>
-                      <strong>{user ? user.total_balance.toFixed(2) : '0.00'}</strong>
-                    </div>
-                  </div>
-
-                  {/* Dynamic Mobile content area based on mobileTab */}
-                  <div className="phone-app-scrollable-body">
+                  {/* Left Column: Daily Attendance & Recruitment Milestone */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     
-                    {/* TAB 1: HOME (dashboard) */}
-                    {mobileTab === 'dashboard' && (
-                      <div className="mobile-tab-home" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* High-quality sliding banners */}
-                        <div className="banner-container">
-                          <div className="banner-track" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
-                            {[
-                              { img: energyBanner, label: "RENEWABLE ENERGY UTILITIES", title: "Fund Solar Node Arrays", desc: "Lease power grid modules in Bangladesh." },
-                              { img: refineryBanner, label: "BATTERY MINERALS REFINING", title: "Lithium Reactor Leases", desc: "Participate in global mineral processors." },
-                              { img: metalsBanner, label: "CUSTODIAL PRECIOUS METALS", title: "Rent Gold refining pipelines", desc: "Direct physical bullion backing assurances." }
-                            ].map((slide, idx) => (
-                              <div key={idx} className="banner-slide" style={{ backgroundImage: `url(${slide.img})` }}>
-                                <div className="banner-overlay"></div>
-                                <div className="banner-content">
-                                  <span className="banner-pretitle">{slide.label}</span>
-                                  <h4 className="banner-title">{slide.title}</h4>
-                                  <span className="banner-desc">{slide.desc}</span>
-                                  <button className="banner-btn" onClick={() => setMobileTab('invest')}>Lease Asset <ArrowUpRight size={10} /></button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="banner-dots">
-                            {[0, 1, 2].map(idx => (
-                              <div key={idx} className={`banner-dot ${currentSlide === idx ? 'active' : ''}`} onClick={() => setCurrentSlide(idx)}></div>
-                            ))}
-                          </div>
+                    {/* Attendance checkin */}
+                    <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 style={{ fontSize: '15px' }}>Daily Attendance Telemetry</h3>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Synchronize your node telemetry once daily to claim attendance allowance.</p>
                         </div>
-
-                        {/* Scrolling marquee ticker */}
-                        <div className="marquee-wrapper">
-                          <div className="marquee-content">
-                            {[
-                              "User +88017****2311 withdrew ৳1,400 via bKash!",
-                              "User +88019****9908 leased Solar Power Grid for ৳1,000!",
-                              "User +88015****3829 withdrew ৳22,500 successfully via Nagad!",
-                              "User +88016****0023 leased Biomass Energy Plant for ৳15,000!",
-                              "User +88018****4567 withdrew ৳6,200 via Rocket!",
-                              "User +88017****8899 leased Lithium Battery Refinery for ৳45,000!",
-                              "User +88013****1212 withdrew ৳550 via bKash!",
-                              "User +88017****5219 leased Gold Refining Facility for ৳1,00,000!"
-                            ].map((item, idx) => {
-                              const isWithdraw = item.includes("withdrew");
-                              return (
-                                <span key={idx} className="marquee-item">
-                                  <span className="marquee-speaker">📢</span>
-                                  <span className="marquee-text-main">
-                                    {item.split(' ')[0]} {item.split(' ')[1]}{' '}
-                                    <span style={{ color: isWithdraw ? '#ef4444' : 'var(--accent-green)', fontWeight: 'bold' }}>
-                                      {isWithdraw ? "withdrew" : "leased"}
-                                    </span>{' '}
-                                    <span style={{ color: 'var(--accent-gold)', fontWeight: 800 }}>
-                                      {item.split(' ').slice(3).join(' ')}
-                                    </span>
-                                  </span>
-                                </span>
-                              );
-                            })}
-                          </div>
+                        <div style={{ background: 'var(--accent-green-glow)', padding: '8px', borderRadius: '50%' }}>
+                          <CheckSquare size={20} style={{ color: 'var(--accent-green)' }} />
                         </div>
-
-                        {/* Quick Actions 2x3 Grid */}
-                        <div className="quick-actions-2x3-grid">
-                          <button onClick={() => { setMobileTab('me'); setDepositModalOpen(true); }} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'var(--accent-green-glow)' }}><ArrowUpRight size={18} style={{ color: 'var(--accent-green)' }} /></div>
-                            <span>Deposit</span>
-                          </button>
-                          <button onClick={() => { setMobileTab('me'); setWithdrawModalOpen(true); }} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'var(--accent-gold-glow)' }}><ArrowDownLeft size={18} style={{ color: 'var(--accent-gold)' }} /></div>
-                            <span>Withdraw</span>
-                          </button>
-                          <button onClick={() => setShowAboutModal(true)} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'rgba(255,255,255,0.05)' }}><Info size={18} style={{ color: '#fff' }} /></div>
-                            <span>About Us</span>
-                          </button>
-                          <button onClick={() => setMobileTab('team')} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'var(--accent-blue-glow)' }}><Share2 size={18} style={{ color: 'var(--accent-blue)' }} /></div>
-                            <span>Invite Friends</span>
-                          </button>
-                          <button onClick={() => setShowPartnershipModal(true)} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'var(--accent-gold-glow)' }}><Handshake size={18} style={{ color: 'var(--accent-gold)' }} /></div>
-                            <span>Partnership</span>
-                          </button>
-                          <button onClick={() => setShowSupportModal(true)} className="quick-action-btn">
-                            <div className="btn-icon-wrap" style={{ background: 'rgba(239, 68, 68, 0.12)' }}><Headphones size={18} style={{ color: '#ef4444' }} /></div>
-                            <span>Support</span>
-                          </button>
-                        </div>
-
-                        {/* Team Leader Event motivating promo card */}
-                        <div className="team-leader-event-card">
-                          <div className="team-leader-header">
-                            <div>
-                              <span className="leader-pill">OFFICIAL CAREER ROADMAP</span>
-                              <h4>Become a Nexora Official Team Leader!</h4>
-                            </div>
-                            <div className="leader-icon-badge"><Award size={22} style={{ color: 'var(--accent-gold)' }} /></div>
-                          </div>
-                          <p>Expand your lease network upline and secure fixed monthly salary payouts credited directly to your bank account or mobile wallet.</p>
-                          <div className="leader-rewards-row">
-                            <div className="reward-item">
-                              <span className="rank-name bronce">Bronze Leader</span>
-                              <strong>৳10,000 / mo</strong>
-                            </div>
-                            <div className="reward-item">
-                              <span className="rank-name silver">Silver Leader</span>
-                              <strong>৳30,000 / mo</strong>
-                            </div>
-                            <div className="reward-item">
-                              <span className="rank-name gold">Gold Leader</span>
-                              <strong>৳60,000 / mo</strong>
-                            </div>
-                            <div className="reward-item">
-                              <span className="rank-name diamond">Diamond Leader</span>
-                              <strong>৳100,000 / mo</strong>
-                            </div>
-                          </div>
-                          <button className="leader-learn-more-btn" onClick={() => setShowPartnershipModal(true)}>Review Partnership Terms <ArrowUpRight size={12} /></button>
-                        </div>
-
                       </div>
-                    )}
 
-                    {/* TAB 2: PROJECTS (asset leasing shop) */}
-                    {mobileTab === 'invest' && (
-                      <div className="mobile-tab-projects" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        <div className="projects-tab-header">
-                          <h3>Clean Energy Lease Shop</h3>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px' }}>Rent fractional physical nodes. All contracts have a fixed 180-day lock-in period with daily ROI harvest clearance. All returns are flat BDT values.</p>
-                        </div>
-
-                        {/* Project cards loop */}
-                        <div className="projects-mobile-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                          {LEASE_PROJECTS.map(proj => (
-                            <div key={proj.id} className="mobile-project-card" style={{ borderLeft: `4px solid ${proj.id === 'gold' ? 'var(--accent-gold)' : 'var(--accent-green)'}` }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                <div>
-                                  <span className="mobile-project-tag">{proj.category}</span>
-                                  <h4 style={{ fontSize: '14px', marginTop: '4px' }}>{proj.name}</h4>
-                                </div>
-                                <div style={{ textAlign: 'right' }}>
-                                  <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Lease Price</span>
-                                  <h4 style={{ color: 'var(--text-main)', fontSize: '14px' }}>৳{proj.price.toLocaleString()}</h4>
-                                </div>
-                              </div>
-
-                              <p className="mobile-proj-desc" style={{ fontSize: '11.5px', color: 'var(--text-muted)', margin: '8px 0', lineHeight: '1.4' }}>{proj.description}</p>
-
-                              <div className="mobile-proj-stats-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', background: 'rgba(0,0,0,0.15)', padding: '8px', borderRadius: '6px', fontSize: '11px', textAlign: 'center' }}>
-                                <div>
-                                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block' }}>Daily Earnings</span>
-                                  <strong style={{ color: 'var(--accent-green)' }}>৳{proj.dailyProfit}</strong>
-                                </div>
-                                <div>
-                                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block' }}>Duration</span>
-                                  <strong style={{ color: 'var(--text-main)' }}>180 Days</strong>
-                                </div>
-                                <div>
-                                  <span style={{ color: 'var(--text-muted)', fontSize: '10px', display: 'block' }}>Total Profit</span>
-                                  <strong style={{ color: 'var(--accent-gold)' }}>৳{proj.totalProfit.toLocaleString()}</strong>
-                                </div>
-                              </div>
-
-                              <button 
-                                onClick={() => setSelectedAgreementProject(proj)} 
-                                className="mobile-project-lease-btn"
-                              >
-                                Sign Agreement & Lease
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                        <span>Daily Allowance:</span>
+                        <strong style={{ color: 'var(--accent-green)' }}>+$0.20 USD</strong>
                       </div>
-                    )}
 
-                    {/* TAB 3: MINING (daily harvest & vault) */}
-                    {mobileTab === 'mining' && (
-                      <div className="mobile-tab-mining" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* Gamified central harvest button */}
-                        <div className="glass-card daily-harvest-hub-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', textAlign: 'center', padding: '20px 14px' }}>
-                          <div>
-                            <h4>Manual Energy Harvest Engine</h4>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Daily ROI yields are not automated. You must tap this central reactor button every 24 hours to sync power payloads and claim earnings.</p>
-                          </div>
+                      <button 
+                        onClick={claimAttendance}
+                        className="btn-primary" 
+                        style={{ justifyContent: 'center', marginTop: '5px' }}
+                      >
+                        Complete Attendance Telemetry
+                      </button>
+                    </div>
 
-                          <div 
-                            onClick={!isMining ? harvestAllContracts : null}
-                            className={`mining-pulsing-circle ${isMining ? 'active-spinning' : ''}`}
-                            style={{ cursor: !isMining ? 'pointer' : 'not-allowed' }}
-                          >
-                            <div className="inner-pulsing-core">
-                              <Zap size={32} style={{ color: isMining ? 'var(--accent-gold)' : 'var(--accent-green)' }} />
-                              <span style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '6px' }}>
-                                {isMining ? `SYNCING ${miningPercent}%` : 'TAP TO HARVEST'}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="turbines-count-row" style={{ display: 'flex', gap: '20px', fontSize: '12px' }}>
-                            <div>Active Leases: <strong>{contracts.filter(c => c.status === 'active').length} nodes</strong></div>
-                            <div>Claimable: <strong>
-                              {contracts.filter(c => {
-                                if (c.status !== 'active') return false;
-                                if (!c.last_claimed_at) return true;
-                                const lastC = new Date(c.last_claimed_at);
-                                const now = new Date();
-                                const isSame = lastC.getUTCDate() === now.getUTCDate() &&
-                                              lastC.getUTCMonth() === now.getUTCMonth() &&
-                                              lastC.getUTCFullYear() === now.getUTCFullYear();
-                                return !isSame;
-                              }).length} nodes
-                            </strong></div>
-                          </div>
+                    {/* Recruitment Milestone Tier */}
+                    <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 style={{ fontSize: '15px' }}>Recruitment Milestone Challenge</h3>
+                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Expand your network: get 3 direct Level 1 downlines to active Tier 1 ($10+) lease project.</p>
                         </div>
-
-                        {/* Compound Lockup Vault */}
-                        <div className="glass-card compound-vault-stashing-card">
-                          <div className="vault-header-row" style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                            <Lock size={16} style={{ color: 'var(--accent-blue)' }} />
-                            <h4>Compound Lockup Vault</h4>
-                          </div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', lineHeight: '1.4' }}>Hedge against payouts volatility. Move daily harvest returns or claimed commission into the locked vault to compound extra fixed rewards.</p>
-                          
-                          <form onSubmit={handleVaultLock} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Stash Amount (Available: ৳{user ? (user.balance + user.commission_balance).toFixed(2) : '0.00'})</label>
-                              <input type="number" placeholder="Enter BDT amount" value={vaultAmount} onChange={e => setVaultAmount(e.target.value)} className="glass-input" style={{ padding: '8px 12px', fontSize: '13px' }} required />
-                            </div>
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Lockup Duration Bonus Options</label>
-                              <div className="vault-duration-selector-row" style={{ display: 'flex', gap: '6px' }}>
-                                {[
-                                  { days: '60', bonus: '+20% bonus' },
-                                  { days: '120', bonus: '+50% bonus' },
-                                  { days: '180', bonus: '+90% bonus' }
-                                ].map(opt => (
-                                  <div 
-                                    key={opt.days} 
-                                    onClick={() => setVaultDuration(opt.days)} 
-                                    className={`duration-pill-opt ${vaultDuration === opt.days ? 'selected' : ''}`}
-                                    style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', textAlign: 'center', cursor: 'pointer', fontSize: '11px' }}
-                                  >
-                                    <strong>{opt.days} Days</strong>
-                                    <span style={{ fontSize: '9px', display: 'block', color: 'var(--accent-green)' }}>{opt.bonus}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            <button type="submit" className="phone-btn-primary" style={{ padding: '8px 12px', fontSize: '12px' }}>
-                              Lock Funds in Vault
-                            </button>
-                          </form>
-
-                          {/* Vault locks ledger list */}
-                          <div className="vault-locks-ledger-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '15px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '15px' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Active Vault Stashes:</span>
-                            {vaultLocks.length === 0 ? (
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>No active vault stashes found.</span>
-                            ) : (
-                              vaultLocks.map(lock => {
-                                const isReleaseReady = new Date() >= new Date(lock.unlock_date);
-                                return (
-                                  <div key={lock.id} className="vault-lock-row-item" style={{ background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div style={{ fontSize: '11px' }}>
-                                      <div>Principal: <strong>৳{lock.amount} BDT</strong></div>
-                                      <div style={{ color: 'var(--accent-green)' }}>Fixed Reward: +৳{(lock.amount * (lock.bonus_pct / 100)).toFixed(2)} (+{lock.bonus_pct}%)</div>
-                                      <div style={{ color: 'var(--text-muted)', fontSize: '9.5px' }}>Unlock Date: {new Date(lock.unlock_date).toLocaleDateString()}</div>
-                                    </div>
-                                    <div>
-                                      {lock.status === 'unlocked' ? (
-                                        <span className="badge badge-gray">CLAIMED</span>
-                                      ) : isReleaseReady ? (
-                                        <button onClick={() => handleVaultUnlock(lock.id)} className="vault-release-btn-claim">Unlock</button>
-                                      ) : (
-                                        <span className="badge badge-blue">LOCKED</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            )}
-                          </div>
+                        <div style={{ background: 'var(--accent-gold-glow)', padding: '8px', borderRadius: '50%' }}>
+                          <Users size={20} style={{ color: 'var(--accent-gold)' }} />
                         </div>
-
                       </div>
-                    )}
 
-                    {/* TAB 4: TEAM (referral network) */}
-                    {mobileTab === 'team' && (
-                      <div className="mobile-tab-team" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* Quick share */}
-                        <div className="glass-card referrals-sharing-card">
-                          <h4>Team Referrals Invite Desk</h4>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Build your local power lease tree. Direct Level 1 commissions (10%), sub-member Level 2 (4%), generational Level 3 (1%).</p>
-
-                          <div className="referral-sharing-link-block" style={{ marginTop: '12px' }}>
-                            <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>YOUR DYNAMIC INVITE LINK:</span>
-                            <div className="link-copy-input-row" style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                              <input type="text" value={`${window.location.origin}?ref=${user ? user.referral_code : ''}`} readOnly className="glass-input" style={{ flex: 1, padding: '6px 10px', fontSize: '11.5px', fontFamily: 'monospace' }} />
-                              <button onClick={() => copyRefLink(`${window.location.origin}?ref=${user ? user.referral_code : ''}`)} className="btn-copy-clip">
-                                {isLinkCopied ? <Check size={14} style={{ color: 'var(--accent-green)' }} /> : <Copy size={14} />}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Social media quick share shortcuts */}
-                          <div className="social-quick-shares-row" style={{ display: 'flex', justifyContent: 'space-between', marginTop: '12px', gap: '6px' }}>
-                            {['Facebook', 'TikTok', 'WhatsApp', 'Telegram'].map(sm => (
-                              <button 
-                                key={sm} 
-                                onClick={() => showStatus(`Opening ${sm} link composer...`, 'info')}
-                                className="social-share-pill-btn"
-                                style={{ flex: 1, padding: '6px 4px', fontSize: '10px', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.01)', color: 'var(--text-main)', cursor: 'pointer' }}
-                              >
-                                {sm}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* QR Code */}
-                          <div className="referral-qr-code-box" style={{ textAlign: 'center', marginTop: '18px' }}>
-                            <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>CLIENT REGISTRATION BARCODE QR:</span>
-                            {renderMockQRCode(`${window.location.origin}?ref=${user ? user.referral_code : ''}`)}
-                          </div>
-                        </div>
-
-                        {/* 3-Tier counters */}
-                        <div className="glass-card team-counters-card">
-                          <h4>Structural Network Statistics</h4>
-                          <div className="counters-tier-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginTop: '12px', textAlign: 'center' }}>
-                            <div className="tier-counter-sub" style={{ flex: 1, background: 'var(--accent-green-glow)', border: '1px solid rgba(0,230,118,0.2)', padding: '10px 4px', borderRadius: '8px' }}>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>LEVEL 1 (Direct)</span>
-                              <strong style={{ fontSize: '18px', color: 'var(--accent-green)', display: 'block', marginTop: '4px' }}>{user ? user.stats.teamBreakdown.level1 : '0'}</strong>
-                              <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>10% Comm</span>
-                            </div>
-                            <div className="tier-counter-sub" style={{ flex: 1, background: 'var(--accent-blue-glow)', border: '1px solid rgba(41,121,255,0.2)', padding: '10px 4px', borderRadius: '8px' }}>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>LEVEL 2 (Indirect)</span>
-                              <strong style={{ fontSize: '18px', color: 'var(--accent-blue)', display: 'block', marginTop: '4px' }}>{user ? user.stats.teamBreakdown.level2 : '0'}</strong>
-                              <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>4% Comm</span>
-                            </div>
-                            <div className="tier-counter-sub" style={{ flex: 1, background: 'var(--accent-gold-glow)', border: '1px solid rgba(255,215,0,0.2)', padding: '10px 4px', borderRadius: '8px' }}>
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block' }}>LEVEL 3 (Gen Layer)</span>
-                              <strong style={{ fontSize: '18px', color: 'var(--accent-gold)', display: 'block', marginTop: '4px' }}>{user ? user.stats.teamBreakdown.level3 : '0'}</strong>
-                              <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>1% Comm</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 1-Click Commission Claiming Button */}
-                        <div className="glass-card commission-1click-claiming-box" style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center', textAlign: 'center' }}>
-                          <div>
-                            <h4>Claim Accumulated Commissions</h4>
-                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '2px' }}>Affiliate referral cuts do not deposit automatically into your active wallet balance. You must clear them via this claim button.</p>
-                          </div>
-                          
-                          <div className="accumulated-balance-row" style={{ display: 'flex', gap: '20px', alignItems: 'center', background: 'rgba(0,0,0,0.15)', padding: '8px 16px', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
-                            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Pending Commission:</span>
-                            <strong style={{ color: 'var(--accent-green)', fontSize: '15px' }}>৳{user ? user.pending_commission.toFixed(2) : '0.00'}</strong>
-                          </div>
-
-                          <button 
-                            onClick={claimTeamCommissions} 
-                            disabled={!user || user.pending_commission <= 0}
-                            className={`glowing-claim-btn ${user && user.pending_commission > 0 ? 'active-pulse' : 'disabled-idle'}`}
-                          >
-                            1-Click Claim Team Commission
-                          </button>
-                        </div>
-
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                        <span>Milestone Reward:</span>
+                        <strong style={{ color: 'var(--accent-gold)' }}>+$10.00 USD</strong>
                       </div>
-                    )}
 
-                    {/* TAB 5: ME (user profile) */}
-                    {mobileTab === 'me' && (
-                      <div className="mobile-tab-me" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        
-                        {/* Triple-wallet layout header */}
-                        <div className="glass-card triple-wallet-apk-card">
-                          <div className="profile-details-top" style={{ display: 'flex', gap: '10px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '12px', marginBottom: '12px' }}>
-                            <div className="profile-initials-avatar">{user ? (user.full_name ? user.full_name.charAt(0) : 'U') : 'U'}</div>
-                            <div>
-                              <strong style={{ fontSize: '14px', display: 'block' }}>{user ? (user.full_name || 'Nexora User') : 'Loading...'}</strong>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Phone: {user ? user.phone : ''}</span>
-                            </div>
+                      {/* Recruitment progress */}
+                      {user && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
+                            <span>Active Downline Leases:</span>
+                            <strong>{user.stats.activeDownlinesCount} / 3 Nodes</strong>
                           </div>
-
-                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Triple-Wallet Balance Architecture:</span>
-                          <div className="triple-wallet-metric-boxes-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '8px' }}>
-                            <div className="metric-box-sub sub-total">
-                              <span>Total Capital</span>
-                              <strong>৳{user ? user.total_balance.toFixed(0) : '0'}</strong>
-                            </div>
-                            <div className="metric-box-sub sub-deposit">
-                              <span>Deposit</span>
-                              <strong>৳{user ? user.deposit_balance.toFixed(0) : '0'}</strong>
-                            </div>
-                            <div className="metric-box-sub sub-comm">
-                              <span>Commission</span>
-                              <strong>৳{user ? user.commission_balance.toFixed(0) : '0'}</strong>
-                            </div>
+                          <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, (user.stats.activeDownlinesCount / 3) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-gold) 0%, #ff8f00 100%)' }}></div>
                           </div>
                         </div>
+                      )}
 
-                        {/* Transaction Controls buttons */}
-                        <div className="transaction-controls-apk-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                          <button onClick={() => setDepositModalOpen(true)} className="apk-tile-btn">
-                            <ArrowUpRight size={16} style={{ color: 'var(--accent-green)' }} />
-                            <div>
-                              <strong>Deposit</strong>
-                              <span>Submit payments</span>
-                            </div>
-                          </button>
-                          <button onClick={() => setWithdrawModalOpen(true)} className="apk-tile-btn">
-                            <ArrowDownLeft size={16} style={{ color: 'var(--accent-gold)' }} />
-                            <div>
-                              <strong>Withdraw</strong>
-                              <span>Cashout requests</span>
-                            </div>
-                          </button>
-                          <button onClick={() => setTxHistoryModalOpen(true)} className="apk-tile-btn" style={{ gridColumn: 'span 2' }}>
-                            <FileText size={16} style={{ color: 'var(--accent-blue)' }} />
-                            <div>
-                              <strong>Transaction Records</strong>
-                              <span>Clearance logs & account history</span>
-                            </div>
-                          </button>
-                        </div>
-
-                        {/* Security updating settings */}
-                        <div className="glass-card security-adjustments-card">
-                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                            <Settings size={15} style={{ color: 'var(--accent-green)' }} />
-                            <h4>Security Management</h4>
-                          </div>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', lineHeight: '1.4' }}>Modify your account identity names, configure security email alerts, and change passwords.</p>
-
-                          <form onSubmit={handleSecurityUpdate} className="apk-security-form" style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Lessor Full Name (Agreement signing)</label>
-                              <input type="text" placeholder="e.g. Shakib Al Hasan" value={securityForm.fullName} onChange={e => setSecurityForm({...securityForm, fullName: e.target.value})} className="glass-input" style={{ padding: '6px 10px', fontSize: '12.5px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Audit Alert Email Address</label>
-                              <input type="email" placeholder="e.g. shakib@mail.com" value={securityForm.email} onChange={e => setSecurityForm({...securityForm, email: e.target.value})} className="glass-input" style={{ padding: '6px 10px', fontSize: '12.5px' }} />
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Secure Account Password</label>
-                              <input type="password" placeholder="••••••••" value={securityForm.password} onChange={e => setSecurityForm({...securityForm, password: e.target.value})} className="glass-input" style={{ padding: '6px 10px', fontSize: '12.5px' }} />
-                            </div>
-                            <button type="submit" className="phone-btn-primary" style={{ padding: '8px', fontSize: '12px', marginTop: '4px' }}>
-                              Save Security Changes
-                            </button>
-                          </form>
-                        </div>
-
-                        {/* Logout button */}
-                        <button className="apk-logout-btn" onClick={handleLogout}>
-                          <LogOut size={16} /> Disconnect Account Node
-                        </button>
-
-                      </div>
-                    )}
+                      <button 
+                        onClick={claimRecruitmentMilestone}
+                        disabled={!user || user.stats.activeDownlinesCount < 3 || user.milestone_recruitment_claimed === 1}
+                        className="btn-primary" 
+                        style={{
+                          justifyContent: 'center',
+                          background: user && user.milestone_recruitment_claimed === 1 ? 'var(--bg-tertiary)' : (user && user.stats.activeDownlinesCount >= 3) ? 'linear-gradient(135deg, var(--accent-gold) 0%, #ff8f00 100%)' : 'var(--bg-tertiary)',
+                          color: user && user.milestone_recruitment_claimed === 1 ? 'var(--text-muted)' : (user && user.stats.activeDownlinesCount >= 3) ? '#000' : 'var(--text-muted)',
+                          cursor: (user && user.stats.activeDownlinesCount >= 3 && user.milestone_recruitment_claimed !== 1) ? 'pointer' : 'not-allowed',
+                          border: '1px solid var(--border-color)'
+                        }}
+                      >
+                        {user && user.milestone_recruitment_claimed === 1 ? "Milestone Claimed" : "Claim Recruitment Reward"}
+                      </button>
+                    </div>
 
                   </div>
 
-                  {/* BOTTOM NAV TABS BAR */}
-                  <div className="phone-bottom-nav-bar">
-                    {bottomNavItems.map(item => {
-                      const IconComponent = item.icon;
-                      const isActive = mobileTab === item.id;
-                      return (
-                        <div 
-                          key={item.id} 
-                          onClick={() => setMobileTab(item.id)} 
-                          className={`phone-bottom-nav-item ${isActive ? 'active-tab' : ''}`}
-                        >
-                          <IconComponent size={18} />
-                          <span>{item.label}</span>
+                  {/* Right Column: Social sharing Screenshot Uploader */}
+                  <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 style={{ fontSize: '15px' }}>Social Amplification sharing</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Share Nexora official banners on Facebook/TikTok. Upload proof screenshot here.</p>
+                      </div>
+                      <div style={{ background: 'var(--accent-blue-glow)', padding: '8px', borderRadius: '50%' }}>
+                        <Upload size={20} style={{ color: 'var(--accent-blue)' }} />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                      <span>Promotion Reward:</span>
+                      <strong style={{ color: 'var(--accent-green)' }}>+$1.00 USD</strong>
+                    </div>
+
+                    <form onSubmit={submitSocialTask} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Choose Screenshot Proof Image</label>
+                        <input type="file" accept="image/*" onChange={handleFileChange} className="glass-input" style={{ fontSize: '12px' }} />
+                      </div>
+
+                      {/* Image preview */}
+                      {proofBase64 && (
+                        <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', maxHeight: '160px' }}>
+                          <img src={proofBase64} alt="proof preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                         </div>
-                      );
-                    })}
+                      )}
+
+                      <button type="submit" className="btn-primary" style={{ justifyContent: 'center', width: '100%' }}>
+                        Submit Screenshot Proof
+                      </button>
+                    </form>
+
+                    <div style={{ marginTop: '10px', fontSize: '11.5px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px', color: 'var(--text-muted)' }}>
+                      <span>Status: Submit post screenshot to claim reward after review.</span>
+                    </div>
                   </div>
 
                 </div>
-              )}
 
-            </div>
+              </div>
+            )}
+
+            {/* TAB 4: TEAM (referral affiliate tree) */}
+            {activeTab === 'team' && (
+              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                <div className="home-dashboard-grid">
+                  
+                  {/* Left Column: sharing link & QR */}
+                  <div className="glass-card referrals-sharing-card" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <h3>Team Referrals Invite Desk</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12.5px' }}>Build your local power lease tree. Direct Level 1 commissions (10%), sub-member Level 2 (4%), generational Level 3 (1%).</p>
+
+                    <div className="referral-sharing-link-block" style={{ marginTop: '5px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>YOUR UNIQUE DYNAMIC INVITE LINK:</span>
+                      <div className="link-copy-input-row" style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                        <input type="text" value={`${window.location.origin}?ref=${user ? user.referral_code : ''}`} readOnly className="glass-input" style={{ flex: 1, fontFamily: 'monospace', fontSize: '12px' }} />
+                        <button onClick={() => copyRefLink(`${window.location.origin}?ref=${user ? user.referral_code : ''}`)} className="btn-copy-clip" style={{ padding: '10px 14px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.02)', color: '#fff', cursor: 'pointer' }}>
+                          {isLinkCopied ? <Check size={16} style={{ color: 'var(--accent-green)' }} /> : <Copy size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="social-quick-shares-row" style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
+                      {['Facebook Share', 'TikTok Share', 'WhatsApp Quick Send', 'Telegram Channels'].map(sm => (
+                        <button 
+                          key={sm} 
+                          onClick={() => showStatus(`Opening ${sm} link composer...`, 'info')}
+                          className="social-share-pill-btn"
+                          style={{ flex: 1, padding: '8px 4px', fontSize: '10.5px', borderRadius: '6px', border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.015)', color: 'var(--text-main)', cursor: 'pointer' }}
+                        >
+                          {sm}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="referral-qr-code-box" style={{ textAlign: 'center', marginTop: '10px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>CLIENT REGISTRATION BARCODE QR:</span>
+                      {renderMockQRCode(`${window.location.origin}?ref=${user ? user.referral_code : ''}`)}
+                    </div>
+                  </div>
+
+                  {/* Right Column: 3-tier metrics & Glowing claim buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    
+                    {/* Level 1 Grid Card */}
+                    <div className="glass-card team-counters-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--accent-green-glow)', border: '1px solid rgba(0,230,118,0.25)' }}>
+                      <div>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 'bold' }}>LEVEL 1 NETWORK (Direct)</span>
+                        <strong style={{ fontSize: '24px', color: 'var(--accent-green)', display: 'block', margin: '4px 0' }}>{user ? user.stats.teamBreakdown.level1 : '0'} Members</strong>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>10% Direct commission reward</span>
+                        <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                          Pending claims: <strong style={{ color: 'var(--accent-green)' }}>${user ? user.level1_pending_comm.toFixed(2) : '0.00'}</strong>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => claimLevelCommission(1)}
+                        disabled={!user || user.level1_pending_comm <= 0}
+                        className={`glowing-claim-btn ${user && user.level1_pending_comm > 0 ? 'active-pulse' : 'disabled-idle'}`}
+                        style={{ padding: '8px 16px', fontSize: '11.5px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: user && user.level1_pending_comm > 0 ? 'pointer' : 'not-allowed' }}
+                      >
+                        Claim L1
+                      </button>
+                    </div>
+
+                    {/* Level 2 Grid Card */}
+                    <div className="glass-card team-counters-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--accent-blue-glow)', border: '1px solid rgba(41,121,255,0.25)' }}>
+                      <div>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 'bold' }}>LEVEL 2 NETWORK (Sub-members)</span>
+                        <strong style={{ fontSize: '24px', color: 'var(--accent-blue)', display: 'block', margin: '4px 0' }}>{user ? user.stats.teamBreakdown.level2 : '0'} Members</strong>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>4% Sub-member commission reward</span>
+                        <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                          Pending claims: <strong style={{ color: 'var(--accent-blue)' }}>${user ? user.level2_pending_comm.toFixed(2) : '0.00'}</strong>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => claimLevelCommission(2)}
+                        disabled={!user || user.level2_pending_comm <= 0}
+                        className={`glowing-claim-btn ${user && user.level2_pending_comm > 0 ? 'active-pulse' : 'disabled-idle'}`}
+                        style={{ padding: '8px 16px', fontSize: '11.5px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: user && user.level2_pending_comm > 0 ? 'pointer' : 'not-allowed' }}
+                      >
+                        Claim L2
+                      </button>
+                    </div>
+
+                    {/* Level 3 Grid Card */}
+                    <div className="glass-card team-counters-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--accent-gold-glow)', border: '1px solid rgba(255,215,0,0.25)' }}>
+                      <div>
+                        <span style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: 'bold' }}>LEVEL 3 NETWORK (Generational)</span>
+                        <strong style={{ fontSize: '24px', color: 'var(--accent-gold)', display: 'block', margin: '4px 0' }}>{user ? user.stats.teamBreakdown.level3 : '0'} Members</strong>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>1% Generational commission reward</span>
+                        <div style={{ marginTop: '8px', fontSize: '12px' }}>
+                          Pending claims: <strong style={{ color: 'var(--accent-gold)' }}>${user ? user.level3_pending_comm.toFixed(2) : '0.00'}</strong>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => claimLevelCommission(3)}
+                        disabled={!user || user.level3_pending_comm <= 0}
+                        className={`glowing-claim-btn ${user && user.level3_pending_comm > 0 ? 'active-pulse' : 'disabled-idle'}`}
+                        style={{ padding: '8px 16px', fontSize: '11.5px', borderRadius: '8px', border: 'none', fontWeight: 'bold', cursor: user && user.level3_pending_comm > 0 ? 'pointer' : 'not-allowed' }}
+                      >
+                        Claim L3
+                      </button>
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+            )}
+
+            {/* TAB 5: ME (User profile settings & balances) */}
+            {activeTab === 'me' && (
+              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                {/* Profile Header and Triple-Wallet balances */}
+                <div className="glass-card triple-wallet-apk-card" style={{ padding: '30px' }}>
+                  <div className="profile-details-top" style={{ display: 'flex', gap: '15px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '20px', marginBottom: '20px' }}>
+                    {user && user.avatar ? (
+                      <img src={user.avatar} alt="avatar" style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--accent-green)' }} />
+                    ) : (
+                      <div className="profile-initials-avatar" style={{ width: '48px', height: '48px', fontSize: '18px' }}>{user ? (user.full_name ? user.full_name.charAt(0) : 'U') : 'U'}</div>
+                    )}
+                    <div>
+                      <strong style={{ fontSize: '18px', display: 'block' }}>{user ? (user.full_name || 'Nexora User') : 'Loading...'}</strong>
+                      <span style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>Registered Phone Node: {user ? user.phone : ''}</span>
+                    </div>
+                  </div>
+
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.8px', display: 'block', marginBottom: '10px' }}>Triple-Wallet Balance Architecture:</span>
+                  
+                  <div className="triple-wallet-metric-boxes-container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="metric-box-sub sub-total" style={{ padding: '15px' }}>
+                      <span style={{ fontSize: '10px' }}>Total Capital Balance</span>
+                      <strong style={{ fontSize: '18px', marginTop: '6px' }}>${user ? user.total_balance.toLocaleString() : '0.00'}</strong>
+                    </div>
+                    <div className="metric-box-sub sub-deposit" style={{ padding: '15px' }}>
+                      <span style={{ fontSize: '10px' }}>Deposit Wallet Balance</span>
+                      <strong style={{ fontSize: '18px', marginTop: '6px', color: 'var(--accent-green)' }}>${user ? user.deposit_balance.toLocaleString() : '0.00'}</strong>
+                    </div>
+                    <div className="metric-box-sub sub-comm" style={{ padding: '15px' }}>
+                      <span style={{ fontSize: '10px' }}>Commission Wallet Balance</span>
+                      <strong style={{ fontSize: '18px', marginTop: '6px', color: 'var(--accent-gold)' }}>${user ? user.commission_balance.toLocaleString() : '0.00'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Double column grid for settings & transactions history */}
+                <div className="home-dashboard-grid">
+                  
+                  {/* Left Column: Transaction Quick Tiles & Security adjustment forms */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    
+                    <div className="transaction-controls-apk-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      <button onClick={() => setDepositModalOpen(true)} className="apk-tile-btn" style={{ padding: '15px' }}>
+                        <ArrowUpRight size={20} style={{ color: 'var(--accent-green)' }} />
+                        <div>
+                          <strong>Deposit Checkout</strong>
+                          <span>Add leasing funds</span>
+                        </div>
+                      </button>
+                      <button onClick={() => setWithdrawModalOpen(true)} className="apk-tile-btn" style={{ padding: '15px' }}>
+                        <ArrowDownLeft size={20} style={{ color: 'var(--accent-gold)' }} />
+                        <div>
+                          <strong>Withdraw Cashout</strong>
+                          <span>Request wallet payouts</span>
+                        </div>
+                      </button>
+                      <button onClick={() => setTxHistoryModalOpen(true)} className="apk-tile-btn" style={{ gridColumn: 'span 2', padding: '15px' }}>
+                        <FileText size={20} style={{ color: 'var(--accent-blue)' }} />
+                        <div>
+                          <strong>Platform Transaction Records Ledger</strong>
+                          <span>Browse manual clearing deposits, payouts history, and referral audits</span>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Settings Form */}
+                    <div className="glass-card security-adjustments-card" style={{ padding: '24px' }}>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+                        <Settings size={18} style={{ color: 'var(--accent-green)' }} />
+                        <h4>Lessor Node Security Configuration</h4>
+                      </div>
+                      <p style={{ color: 'var(--text-muted)', fontSize: '12px', lineHeight: '1.4' }}>Modify your legal name, contact email address, node display avatar, and validate password credentials.</p>
+
+                      <form onSubmit={handleProfileUpdate} className="apk-security-form" style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '15px' }}>
+                        
+                        {/* Avatar Image Selector */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Lessor Display Avatar Image</label>
+                          <input type="file" accept="image/*" onChange={handleAvatarFileChange} className="glass-input" style={{ fontSize: '12px' }} />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Lessor Full Name (Agreement Deed Signature Name)</label>
+                          <input type="text" placeholder="e.g. Shakib Al Hasan" value={profileForm.fullName} onChange={e => setProfileForm({...profileForm, fullName: e.target.value})} className="glass-input" />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Registered Phone Node</label>
+                          <input type="text" placeholder="e.g. +8801700000000" value={profileForm.phone} onChange={e => setProfileForm({...profileForm, phone: e.target.value})} className="glass-input" />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Linked Gmail Account Node</label>
+                          <input type="email" placeholder="e.g. shakib@gmail.com" value={profileForm.email} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="glass-input" />
+                        </div>
+                        
+                        {/* Password OLD to NEW validator */}
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', marginTop: '5px' }}>
+                          <span style={{ fontSize: '10.5px', color: 'var(--accent-gold)', display: 'block', marginBottom: '8px' }}>Security Password Change Vault:</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Current Password Key</label>
+                              <input type="password" placeholder="••••••••" value={profileForm.oldPassword} onChange={e => setProfileForm({...profileForm, oldPassword: e.target.value})} className="glass-input" />
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>New Password Key</label>
+                              <input type="password" placeholder="••••••••" value={profileForm.newPassword} onChange={e => setProfileForm({...profileForm, newPassword: e.target.value})} className="glass-input" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <button type="submit" className="btn-primary" style={{ justifyContent: 'center', marginTop: '5px' }}>
+                          Save Security Changes
+                        </button>
+                      </form>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column: Platform overview details and stats */}
+                  <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    <h4>Lessor Accounts Legal Deed Verification</h4>
+                    <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <p>All active lease contracts are legally backed by physical renewable grid nodes and commodities stockpiles managed directly by Nexora custodial groups.</p>
+                      <p><strong>Lessor Rights</strong>:</p>
+                      <ul style={{ paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <li>Instant daily ROI settlements are credited directly to your daily earnings wallet balance.</li>
+                        <li>180-day lockups are protected by hardware lease contracts. Early liquidation is prohibited.</li>
+                        <li>Referral cuts and vault compound interest are subject to double-currency audits.</li>
+                      </ul>
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px', marginTop: '10px' }}>
+                        <span>Lessor Legal Stamp ID:</span>
+                        <strong style={{ display: 'block', color: 'var(--accent-gold)', fontFamily: 'monospace', fontSize: '11px', marginTop: '2px' }}>
+                          NEX-DEED-{user ? user.referral_code : 'XXXX'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Disconnect button */}
+                <button className="apk-logout-btn" onClick={handleLogout} style={{ maxWidth: '200px', alignSelf: 'flex-start' }}>
+                  <LogOut size={16} /> Disconnect Account Node
+                </button>
+
+              </div>
+            )}
+
           </div>
-        </div>
+        )}
 
-      </div>
+      </main>
+
+      {/* Mobile-Only Navigation bottom tabs bar */}
+      {!landingMode && token && !isAdmin && (
+        <div className="phone-bottom-nav-bar mobile-only-nav">
+          {bottomNavItems.map(item => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <div 
+                key={item.id} 
+                onClick={() => setActiveTab(item.id)} 
+                className={`phone-bottom-nav-item ${isActive ? 'active-tab' : ''}`}
+              >
+                <Icon size={20} />
+                <span>{item.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* OVERLAY MODAL: DIGITAL INVESTMENT AGREEMENT PAGE */}
       {selectedAgreementProject && (
         <div className="modal-backdrop">
-          <div className="glass-card digital-agreement-modal">
+          <div className="glass-card digital-agreement-modal" style={{ maxWidth: '600px', width: '90%' }}>
             <div className="modal-header-row" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
               <h3>Nexora Infrastructure Lease Agreement</h3>
               <X size={18} className="btn-close-modal" onClick={() => { setSelectedAgreementProject(null); setAgreementChecked(false); }} />
@@ -1755,11 +2294,11 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
                   <span>Purchase Cost:</span>
-                  <strong>৳{selectedAgreementProject.price.toLocaleString()} BDT</strong>
+                  <strong>${selectedAgreementProject.price.toLocaleString()} USD</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
                   <span>Daily Earnings Yield:</span>
-                  <strong style={{ color: 'var(--accent-green)' }}>৳{selectedAgreementProject.dailyProfit.toLocaleString()} BDT/day</strong>
+                  <strong style={{ color: 'var(--accent-green)' }}>+${selectedAgreementProject.dailyProfit.toLocaleString()} USD/day</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
                   <span>Lock-in Duration:</span>
@@ -1767,18 +2306,18 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
                   <span>Guaranteed Net Yield:</span>
-                  <strong style={{ color: 'var(--accent-gold)' }}>৳{selectedAgreementProject.totalProfit.toLocaleString()} BDT</strong>
+                  <strong style={{ color: 'var(--accent-gold)' }}>${selectedAgreementProject.totalProfit.toLocaleString()} USD</strong>
                 </div>
               </div>
 
               <div className="legal-paragraphs" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '0 5px' }}>
                 <p>1. <strong>Purpose</strong>: This Deed binds Nexora Global Trust (the 'Custodian') and the Lessor Client (the 'Lessor') to secure physical infrastructure leases for green generator turbines.</p>
-                <p>2. <strong>Settlement Terms</strong>: Earnings are calculated based on utility power outputs. The Lessor must manually trigger grid sync telemetry under the Mining Tab daily to claim their daily returns. Unclaimed daily ROI cannot be retroactively recovered.</p>
+                <p>2. <strong>Settlement Terms</strong>: Earnings are calculated based on utility power outputs. The Lessor must manually trigger grid sync telemetry under the Mining Engine daily to claim their daily returns. Unclaimed daily ROI cannot be retroactively recovered.</p>
                 <p>3. <strong>Anti-Fraud Security</strong>: The lease is strictly locked for 180 days. Capital liquidation before expiration is prohibited. Accounts attempting false double-clearing deposits or clone referral registrations will be permanently frozen by admin controllers.</p>
                 <p>4. <strong>Legal Authority</strong>: This agreement is governed by the laws of Bangladesh and the Digital Assets Leasing Act of 2026.</p>
               </div>
 
-              {/* Stamp Graphic */}
+              {/* Stamp Graphic with Red/Gold Wax Seal */}
               <div style={{ marginTop: '20px', textAlign: 'center' }}>
                 <span style={{ fontSize: '9px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>OFFICIAL VERIFIED CUSTODIAN CERTIFICATION SEAL:</span>
                 {renderCorporateStamp()}
@@ -1809,41 +2348,88 @@ export default function App() {
         </div>
       )}
 
-      {/* OVERLAY MODAL: DEPOSIT DIALOG */}
+      {/* OVERLAY MODAL: AUTOMATED DEPOSIT PAYWALL */}
       {depositModalOpen && (
         <div className="modal-backdrop">
-          <div className="glass-card modal-content-wrap">
+          <div className="glass-card modal-content-wrap" style={{ maxWidth: '480px', width: '90%' }}>
             <div className="modal-header-row">
-              <h3>Checkout Deposit Counter</h3>
+              <h3>Secure Checkout Deposit Paywall</h3>
               <X size={18} className="btn-close-modal" onClick={() => setDepositModalOpen(false)} />
             </div>
             
-            <div className="deposit-instructions-box" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', fontSize: '11px', border: '1px solid var(--border-color)', marginBottom: '14px', lineHeight: '1.5' }}>
-              <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>BDT MANUAL DEPOSIT CHANNELS:</span>
-              <p>Cashout or Send-Money to the official merchant numbers below:</p>
-              <div style={{ margin: '4px 0' }}>bKash Merchant: <strong>+8801700998822</strong></div>
-              <div style={{ margin: '4px 0' }}>Nagad Merchant: <strong>+8801988443322</strong></div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '6px' }}>Submit your payment transaction ID (TrxID) below. Admin confirmation clear time is typically 1-2 hours.</p>
-            </div>
-
             <form onSubmit={handleDepositSubmit} className="modal-form-body">
               <div className="form-input-block">
-                <label>Deposit Amount (BDT ৳)</label>
-                <input type="number" placeholder="Enter amount" value={depositForm.amount} onChange={e => setDepositForm({...depositForm, amount: e.target.value})} className="glass-input" required />
+                <label>Deposit Amount (USD $)</label>
+                <input type="number" placeholder="Enter amount in USD" value={depositForm.amount} onChange={e => setDepositForm({...depositForm, amount: e.target.value})} className="glass-input" required />
               </div>
+              
               <div className="form-input-block">
-                <label>Mobile Wallet Channel</label>
+                <label>Payment Channel</label>
                 <select value={depositForm.channel} onChange={e => setDepositForm({...depositForm, channel: e.target.value})} className="glass-input">
-                  <option value="bKash">bKash Merchant Wallet</option>
-                  <option value="Nagad">Nagad Merchant Wallet</option>
-                  <option value="Rocket">Rocket Personal Wallet</option>
+                  <option value="bKash Mobile Deposit">bKash Mobile Payment (+880)</option>
+                  <option value="USDT TRC20 Checkout">USDT Crypto Checkout (TRC20)</option>
+                  <option value="Credit Card Gate">Credit / Debit Card Checkout</option>
                 </select>
               </div>
-              <div className="form-input-block">
-                <label>Transaction ID (TrxID)</label>
-                <input type="text" placeholder="e.g. TXN102948010" value={depositForm.trxId} onChange={e => setDepositForm({...depositForm, trxId: e.target.value})} className="glass-input" required />
-              </div>
-              <button type="submit" className="btn-primary" style={{ justifyContent: 'center' }}>Submit Receipt</button>
+
+              {/* Dynamic instruction overlays based on channel */}
+              {depositForm.channel === 'bKash Mobile Deposit' && (
+                <div className="deposit-instructions-box" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', fontSize: '11px', border: '1px solid var(--border-color)', marginBottom: '14px', lineHeight: '1.5' }}>
+                  <span style={{ color: 'var(--accent-gold)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>bKash Mobile instructions:</span>
+                  <p>Send Cashout or Send-Money (Equivalent USD rate ৳120/$1) to the official merchant numbers below:</p>
+                  <div style={{ margin: '4px 0' }}>bKash Merchant: <strong>+8801700998822</strong></div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '10px', marginTop: '6px' }}>Input your TrxID below to clear transaction.</p>
+                  <div className="form-input-block" style={{ marginTop: '10px' }}>
+                    <label>Transaction ID (TrxID)</label>
+                    <input type="text" placeholder="e.g. TXN102948010" value={depositForm.trxId} onChange={e => setDepositForm({...depositForm, trxId: e.target.value})} className="glass-input" required />
+                  </div>
+                </div>
+              )}
+
+              {depositForm.channel === 'USDT TRC20 Checkout' && (
+                <div className="deposit-instructions-box" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', fontSize: '11px', border: '1px solid var(--border-color)', marginBottom: '14px', lineHeight: '1.5' }}>
+                  <span style={{ color: 'var(--accent-blue)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>USDT TRC20 Crypto instructions:</span>
+                  <p>Transfer exactly the amount to our secure custodian deposit hash address below:</p>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '6px', borderRadius: '4px', margin: '6px 0', fontFamily: 'monospace' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>TYH872hD83jDksa92kDhS89dKals72HkdS</span>
+                    <button type="button" onClick={() => { copyToClipboard("TYH872hD83jDksa92kDhS89dKals72HkdS"); showStatus("Address copied!", "info"); }} style={{ padding: '2px 6px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: '#fff', cursor: 'pointer', fontSize: '10px' }}>Copy</button>
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Submit your Blockchain Tx Hash below for verifying clearance.</p>
+                  <div className="form-input-block" style={{ marginTop: '10px' }}>
+                    <label>USDT Tx Hash ID</label>
+                    <input type="text" placeholder="e.g. 0x8a92d83ab9e984..." value={depositForm.trxId} onChange={e => setDepositForm({...depositForm, trxId: e.target.value})} className="glass-input" required />
+                  </div>
+                </div>
+              )}
+
+              {depositForm.channel === 'Credit Card Gate' && (
+                <div className="deposit-instructions-box" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', fontSize: '11px', border: '1px solid var(--border-color)', marginBottom: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <span style={{ color: 'var(--accent-green)', fontWeight: 'bold', display: 'block' }}>Instant Credit Card processor:</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Cardholder Name</label>
+                    <input type="text" placeholder="e.g. Shakib Al Hasan" className="glass-input" style={{ padding: '6px', fontSize: '11px' }} required />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Card Number</label>
+                    <input type="text" placeholder="4000 1234 5678 9010" className="glass-input" style={{ padding: '6px', fontSize: '11px' }} required />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Expiration Date</label>
+                      <input type="text" placeholder="MM/YY" className="glass-input" style={{ padding: '6px', fontSize: '11px' }} required />
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>CVV Code</label>
+                      <input type="password" placeholder="•••" className="glass-input" style={{ padding: '6px', fontSize: '11px' }} required />
+                    </div>
+                  </div>
+                  <input type="hidden" value="CREDIT_CARD_INSTANT" />
+                </div>
+              )}
+
+              <button type="submit" className="btn-primary" style={{ justifyContent: 'center', width: '100%', marginTop: '5px' }}>
+                Complete Paywall checkout
+              </button>
             </form>
           </div>
         </div>
@@ -1852,7 +2438,7 @@ export default function App() {
       {/* OVERLAY MODAL: WITHDRAWAL DIALOG */}
       {withdrawModalOpen && (
         <div className="modal-backdrop">
-          <div className="glass-card modal-content-wrap">
+          <div className="glass-card modal-content-wrap" style={{ maxWidth: '440px', width: '90%' }}>
             <div className="modal-header-row">
               <h3>Clear Payout Cashout</h3>
               <X size={18} className="btn-close-modal" onClick={() => setWithdrawModalOpen(false)} />
@@ -1860,7 +2446,7 @@ export default function App() {
 
             <div className="payout-instructions-box" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', fontSize: '11px', border: '1px solid var(--border-color)', marginBottom: '14px', lineHeight: '1.4' }}>
               <span style={{ color: '#ef4444', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>CASH-OUT CONFIGURATION:</span>
-              <div>Minimum Payout: <strong>৳500.00 BDT</strong></div>
+              <div>Minimum Payout: <strong>$5.00 USD</strong></div>
               <div>Standard Clearing Fee: <strong>10% service fee</strong></div>
             </div>
 
@@ -1868,29 +2454,154 @@ export default function App() {
               <div className="form-input-block">
                 <label>Withdrawal Source Wallet</label>
                 <select value={withdrawForm.source} onChange={e => setWithdrawForm({...withdrawForm, source: e.target.value})} className="glass-input">
-                  <option value="earnings">Daily Earnings Wallet (Avail: ৳{user ? user.balance.toFixed(2) : '0.00'})</option>
-                  <option value="commission">Commission Wallet (Avail: ৳{user ? user.commission_balance.toFixed(2) : '0.00'})</option>
+                  <option value="earnings">Daily Earnings Wallet (Avail: ${user ? user.balance.toFixed(2) : '0.00'})</option>
+                  <option value="commission">Commission Wallet (Avail: ${user ? user.commission_balance.toFixed(2) : '0.00'})</option>
                 </select>
               </div>
               <div className="form-input-block">
-                <label>Withdraw Amount (BDT ৳)</label>
+                <label>Withdraw Amount (USD $)</label>
                 <input type="number" placeholder="Enter amount" value={withdrawForm.amount} onChange={e => setWithdrawForm({...withdrawForm, amount: e.target.value})} className="glass-input" required />
               </div>
               <div className="form-input-block">
                 <label>Payout Channel</label>
                 <select value={withdrawForm.channel} onChange={e => setWithdrawForm({...withdrawForm, channel: e.target.value})} className="glass-input">
-                  <option value="bKash Mobile">bKash Mobile Payout</option>
-                  <option value="Nagad Mobile">Nagad Mobile Payout</option>
+                  <option value="bKash Mobile Payout">bKash Mobile Payout (+880)</option>
+                  <option value="Nagad Mobile Payout">Nagad Mobile Payout (+880)</option>
+                  <option value="USDT TRC20 Wallet">USDT TRC20 Crypto Wallet</option>
                 </select>
               </div>
               <div className="form-input-block">
-                <label>Receiver Wallet Mobile Account</label>
-                <input type="text" placeholder="e.g. +88017XXXXXXXX" value={withdrawForm.destination} onChange={e => setWithdrawForm({...withdrawForm, destination: e.target.value})} className="glass-input" required />
+                <label>Receiver Wallet Account Mobile/Address</label>
+                <input type="text" placeholder="e.g. +88017... or TYH..." value={withdrawForm.destination} onChange={e => setWithdrawForm({...withdrawForm, destination: e.target.value})} className="glass-input" required />
               </div>
               <button type="submit" className="btn-primary" style={{ justifyContent: 'center', background: 'linear-gradient(135deg, #ef4444 0%, #ff5252 100%)', color: '#fff' }}>
                 Request Clearance Payout
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY MODAL: MINING ENGINE QUICK ACTION SHEET */}
+      {miningModalOpen && (
+        <div className="modal-backdrop">
+          <div className="glass-card modal-content-wrap" style={{ maxWidth: '800px', width: '95%' }}>
+            <div className="modal-header-row" style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', marginBottom: '15px' }}>
+              <h3>Nexora Manual Daily ROI Sync & Vault</h3>
+              <X size={18} className="btn-close-modal" onClick={() => setMiningModalOpen(false)} />
+            </div>
+
+            <div className="home-dashboard-grid">
+              
+              {/* Left Column: Pulsing Harvest central button */}
+              <div className="glass-card daily-harvest-hub-card" style={{ display: 'flex', flexDirection: 'column', gap: '14px', alignItems: 'center', textAlign: 'center', padding: '20px' }}>
+                <div>
+                  <h3 style={{ fontSize: '15px' }}>Manual Energy Harvest Engine</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '6px' }}>Daily ROI yields are not automated. You must tap this central reactor button every 24 hours to sync power payloads and claim earnings.</p>
+                </div>
+
+                <div 
+                  onClick={!isMining ? harvestAllContracts : null}
+                  className={`mining-pulsing-circle ${isMining ? 'active-spinning' : ''}`}
+                  style={{ width: '130px', height: '130px', cursor: !isMining ? 'pointer' : 'not-allowed', margin: '15px 0' }}
+                >
+                  <div className="inner-pulsing-core">
+                    <Zap size={40} style={{ color: isMining ? 'var(--accent-gold)' : 'var(--accent-green)' }} />
+                    <span style={{ fontSize: '10px', fontWeight: 'bold', marginTop: '6px' }}>
+                      {isMining ? `SYNCING ${miningPercent}%` : 'TAP TO HARVEST'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="turbines-count-row" style={{ display: 'flex', gap: '20px', fontSize: '12.5px' }}>
+                  <div>Active Nodes: <strong>{contracts.filter(c => c.status === 'active').length}</strong></div>
+                  <div>Claimable today: <strong>
+                    {contracts.filter(c => {
+                      if (c.status !== 'active') return false;
+                      if (!c.last_claimed_at) return true;
+                      const lastC = new Date(c.last_claimed_at);
+                      const now = new Date();
+                      const isSame = lastC.getUTCDate() === now.getUTCDate() &&
+                                    lastC.getUTCMonth() === now.getUTCMonth() &&
+                                    lastC.getUTCFullYear() === now.getUTCFullYear();
+                      return !isSame;
+                    }).length}
+                  </strong></div>
+                </div>
+              </div>
+
+              {/* Right Column: Compound lockup Vault */}
+              <div className="glass-card compound-vault-stashing-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px' }}>
+                <div className="vault-header-row" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <Lock size={18} style={{ color: 'var(--accent-blue)' }} />
+                  <h3 style={{ fontSize: '15px' }}>Compound Lockup Vault</h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '11px', lineHeight: '1.4' }}>Move daily harvest returns or claimed commission into the locked vault to compound extra fixed rewards.</p>
+                
+                <form onSubmit={handleVaultLock} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '5px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Stash Amount (Available: ${user ? (user.balance + user.commission_balance).toFixed(2) : '0.00'})</label>
+                    <input type="number" placeholder="Enter USD amount" value={vaultAmount} onChange={e => setVaultAmount(e.target.value)} className="glass-input" style={{ padding: '10px' }} required />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Lockup Duration Options</label>
+                    <div className="vault-duration-selector-row" style={{ display: 'flex', gap: '8px' }}>
+                      {[
+                        { days: '60', bonus: '+20% bonus' },
+                        { days: '120', bonus: '+50% bonus' },
+                        { days: '180', bonus: '+90% bonus' }
+                      ].map(opt => (
+                        <div 
+                          key={opt.days} 
+                          onClick={() => setVaultDuration(opt.days)} 
+                          className={`duration-pill-opt ${vaultDuration === opt.days ? 'selected' : ''}`}
+                          style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid var(--border-color)', textAlign: 'center', cursor: 'pointer', fontSize: '11px' }}
+                        >
+                          <strong>{opt.days} Days</strong>
+                          <span style={{ fontSize: '9px', display: 'block', color: 'var(--accent-green)' }}>{opt.bonus}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button type="submit" className="btn-primary" style={{ justifyContent: 'center', padding: '10px' }}>
+                    Lock Funds in Vault
+                  </button>
+                </form>
+
+                {/* Vault locks ledger list */}
+                <div className="vault-locks-ledger-list" style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px', maxHeight: '160px', overflowY: 'auto' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Active Vault Stashes:</span>
+                  {vaultLocks.length === 0 ? (
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center', padding: '10px 0' }}>No active vault stashes found.</span>
+                  ) : (
+                    vaultLocks.map(lock => {
+                      const isReleaseReady = new Date() >= new Date(lock.unlock_date);
+                      return (
+                        <div key={lock.id} className="vault-lock-row-item" style={{ background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: '11px' }}>
+                            <div>Principal: <strong>${lock.amount.toFixed(2)}</strong></div>
+                            <div style={{ color: 'var(--accent-green)' }}>Fixed Reward: +${(lock.amount * (lock.bonus_pct / 100)).toFixed(2)} (+{lock.bonus_pct}%)</div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '9.5px' }}>Unlock Date: {new Date(lock.unlock_date).toLocaleDateString()}</div>
+                          </div>
+                          <div>
+                            {lock.status === 'unlocked' ? (
+                              <span className="badge badge-gray" style={{ fontSize: '9px' }}>CLAIMED</span>
+                            ) : isReleaseReady ? (
+                              <button onClick={() => handleVaultUnlock(lock.id)} className="vault-release-btn-claim" style={{ fontSize: '9px', padding: '3px 6px' }}>Unlock & Claim</button>
+                            ) : (
+                              <span className="badge badge-blue" style={{ fontSize: '9px' }}>LOCKED</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
           </div>
         </div>
       )}
@@ -1926,7 +2637,7 @@ export default function App() {
                         <td style={{ padding: '10px 0', color: 'var(--text-muted)' }}>{new Date(t.created_at).toLocaleDateString()}</td>
                         <td style={{ fontWeight: 600 }}>{t.type.toUpperCase()}</td>
                         <td style={{ color: t.type === 'deposit' || t.type === 'referral_comm' || t.type === 'claim' || t.type === 'claim_commission' || t.type === 'vault_unlock' ? 'var(--accent-green)' : '#ef4444' }}>
-                          {t.type === 'deposit' || t.type === 'referral_comm' || t.type === 'claim' || t.type === 'claim_commission' || t.type === 'vault_unlock' ? '+' : '-'}৳{t.amount}
+                          {t.type === 'deposit' || t.type === 'referral_comm' || t.type === 'claim' || t.type === 'claim_commission' || t.type === 'vault_unlock' ? '+' : '-'}${t.amount.toFixed(2)}
                         </td>
                         <td>{t.channel || 'System Node'} - {t.trx_id || t.details}</td>
                         <td>
@@ -1959,11 +2670,12 @@ export default function App() {
               <p style={{ color: 'var(--accent-blue)' }}>✓ Double-wallet security checks</p>
               <p style={{ color: 'var(--accent-gold)' }}>✓ Certified physical contracts</p>
             </div>
-            <button className="phone-btn-primary" onClick={() => setShowAboutModal(false)} style={{ marginTop: '15px' }}>Close</button>
+            <button className="btn-primary" onClick={() => setShowAboutModal(false)} style={{ marginTop: '15px', width: '100%', justifyContent: 'center' }}>Close Info</button>
           </div>
         </div>
       )}
 
+      {/* PARTNERSHIP MODAL (USD) */}
       {showPartnershipModal && (
         <div className="modal-backdrop">
           <div className="glass-card modal-content-wrap">
@@ -1974,18 +2686,19 @@ export default function App() {
             <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '10px', lineHeight: '1.5' }}>
               <p>Grow your direct invite network of active lease nodes to qualify for Nexora Agent status.</p>
               <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div>• <strong>Bronze Leader</strong>: Invite 10 active direct downlines. Salary: <strong>৳10,000 / month</strong>.</div>
-                <div>• <strong>Silver Leader</strong>: Invite 30 active direct downlines. Salary: <strong>৳30,000 / month</strong>.</div>
-                <div>• <strong>Gold Leader</strong>: Invite 80 active direct downlines. Salary: <strong>৳60,000 / month</strong>.</div>
-                <div>• <strong>Diamond Leader</strong>: Invite 150 active direct downlines. Salary: <strong>৳100,000 / month</strong>.</div>
+                <div>• <strong>Bronze Leader</strong>: Invite 10 active direct downlines. Salary: <strong>$100.00 / month</strong>.</div>
+                <div>• <strong>Silver Leader</strong>: Invite 30 active direct downlines. Salary: <strong>$300.00 / month</strong>.</div>
+                <div>• <strong>Gold Leader</strong>: Invite 80 active direct downlines. Salary: <strong>$600.00 / month</strong>.</div>
+                <div>• <strong>Diamond Leader</strong>: Invite 150 active direct downlines. Salary: <strong>$1,000.00 / month</strong>.</div>
               </div>
               <p>All monthly salaries are distributed manually by clearing desks on the 1st of every calendar month. Downline nodes must have at least one active infrastructure lease contract.</p>
             </div>
-            <button className="phone-btn-primary" onClick={() => setShowPartnershipModal(false)} style={{ marginTop: '15px' }}>Accept Terms</button>
+            <button className="btn-primary" onClick={() => setShowPartnershipModal(false)} style={{ marginTop: '15px', width: '100%', justifyContent: 'center' }}>Accept Terms</button>
           </div>
         </div>
       )}
 
+      {/* SUPPORT DESK MODAL */}
       {showSupportModal && (
         <div className="modal-backdrop">
           <div className="glass-card modal-content-wrap">
@@ -2005,7 +2718,50 @@ export default function App() {
                 </a>
               </div>
             </div>
-            <button className="phone-btn-primary" onClick={() => setShowSupportModal(false)} style={{ marginTop: '15px' }}>Close</button>
+            <button className="btn-primary" onClick={() => setShowSupportModal(false)} style={{ marginTop: '15px', width: '100%', justifyContent: 'center' }}>Close Support</button>
+          </div>
+        </div>
+      )}
+
+      {/* HARD LOCK EXCEPTION MODAL (Frozen Wallet Warning) */}
+      {showFrozenWalletModal && (
+        <div className="modal-backdrop">
+          <div className="glass-card modal-content-wrap" style={{ border: '2px solid #ef4444', background: 'radial-gradient(circle at 10% 10%, rgba(239, 68, 68, 0.08) 0%, rgba(12, 15, 29, 0.98) 90%)' }}>
+            <div className="modal-header-row">
+              <h3 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '8px' }}><ShieldAlert size={20} /> Withdrawal Operation Aborted</h3>
+              <X size={18} className="btn-close-modal" onClick={() => setShowFrozenWalletModal(false)} />
+            </div>
+            <div style={{ fontSize: '13px', color: 'var(--text-main)', marginTop: '10px', lineHeight: '1.6', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontWeight: 'bold' }}>
+                Task Wallet balance is currently frozen.
+              </p>
+              <p style={{ color: 'var(--text-muted)' }}>
+                To permanently activate withdrawals, your account must possess at least one running Tier 1 ($10) or higher active investment project.
+              </p>
+              <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Required Action:</span>
+                <p style={{ fontSize: '12px', color: 'var(--accent-gold)', marginTop: '4px', fontWeight: '500' }}>Activate Nexora Eco-Mini Grid ($10.00 USD) or higher package to instantly unfreeze your task balances.</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button 
+                onClick={() => {
+                  setShowFrozenWalletModal(false);
+                  setActiveTab('invest');
+                }} 
+                className="btn-primary" 
+                style={{ flex: 1, justifyContent: 'center', background: 'linear-gradient(135deg, var(--accent-gold) 0%, #ff8f00 100%)', color: '#000' }}
+              >
+                Go to Project Shop
+              </button>
+              <button 
+                onClick={() => setShowFrozenWalletModal(false)} 
+                className="btn-secondary" 
+                style={{ flex: 1 }}
+              >
+                Close Warning
+              </button>
+            </div>
           </div>
         </div>
       )}
