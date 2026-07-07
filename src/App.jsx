@@ -997,6 +997,30 @@ export default function App() {
     </div>
   );
 
+  const renderTickerBar = () => {
+    return (
+      <div className="ticker-top-bar">
+        <div className="ticker-top-left">
+          <div className="live-dot" />
+          <span className="ticker-live-txt">
+            NEXORA SECURE NETWORK STATUS: ONLINE | SERVER LATENCY: 42ms | SYSTEM YIELD RATE: +12.4% APY
+          </span>
+        </div>
+        {isAdmin ? (
+          <div className="admin-status-pill" onClick={handleAdminLogout}>
+            <Shield size={12} />
+            <span>Admin Active - Sign Out</span>
+          </div>
+        ) : (
+          <div className="admin-status-pill" onClick={() => setShowAdminLogin(true)}>
+            <ShieldAlert size={12} />
+            <span>Admin Portal Gateway</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="app-layout-root">
       
