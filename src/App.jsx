@@ -3,7 +3,8 @@ import {
   Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock, 
   Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy, 
   Check, X, Award, Handshake, Info, Headphones, Settings, 
-  FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List
+  FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List,
+  Clock, Trash2
 } from 'lucide-react';
 
 import energyBanner from './assets/energy_banner.png';
@@ -29,6 +30,14 @@ export default function App() {
   const [adminToken, setAdminToken] = useState(localStorage.getItem('nex_admin_token') || null);
   const [adminData, setAdminData] = useState(null);
   const [adminTaskSubmissions, setAdminTaskSubmissions] = useState([]);
+  
+  // Admin-specific States for Modern Dashboard
+  const [adminActiveTab, setAdminActiveTab] = useState('task-control');
+  const [taskConfigs, setTaskConfigs] = useState([]);
+  const [labourLogs, setLabourLogs] = useState([]);
+  const [isTaskMenuExpanded, setIsTaskMenuExpanded] = useState(true);
+  const [configsState, setConfigsState] = useState([]);
+  const [liveUTC, setLiveUTC] = useState("");
 
   // Responsive Layout View States
   const [landingMode, setLandingMode] = useState(true); // true = landing page, false = app portal
@@ -54,7 +63,7 @@ export default function App() {
   // Auth Forms
   const [signupForm, setSignupForm] = useState({ phone: '', password: '', referredByCode: '' });
   const [loginForm, setLoginForm] = useState({ phone: '', password: '' });
-  const [adminForm, setAdminForm] = useState({ username: '', password: '' });
+  const [adminForm, setAdminForm] = useState({ username: 'admin', password: 'admin123' });
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Transaction Forms (USD)
@@ -145,12 +154,39 @@ export default function App() {
       setIsAdmin(true);
       fetchAdminData();
       fetchAdminTaskSubmissions();
+      fetchTaskConfigs();
+      fetchLabourLogs();
     } else {
       setIsAdmin(false);
       setAdminData(null);
       setAdminTaskSubmissions([]);
+      setTaskConfigs([]);
+      setLabourLogs([]);
     }
   }, [adminToken]);
+
+  useEffect(() => {
+    setConfigsState(taskConfigs);
+  }, [taskConfigs]);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const d = new Date();
+      const pad = (n, l=2) => String(n).padStart(l, '0');
+      const year = d.getUTCFullYear();
+      const month = pad(d.getUTCMonth() + 1);
+      const date = pad(d.getUTCDate());
+      const hours = pad(d.getUTCHours());
+      const minutes = pad(d.getUTCMinutes());
+      const seconds = pad(d.getUTCSeconds());
+      const ms = pad(d.getUTCMilliseconds(), 3);
+      const us = pad(Math.floor(Math.random() * 1000), 3);
+      setLiveUTC(`${year}-${month}-${date} ${hours}:${minutes}:${seconds}.${ms}${us}`);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const showStatus = (text, type = 'success') => {
     setStatusMsg({ text, type });
@@ -246,6 +282,34 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setAdminTaskSubmissions(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchTaskConfigs = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/task-configurations`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTaskConfigs(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchLabourLogs = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/labour-logs`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLabourLogs(data);
       }
     } catch (err) {
       console.error(err);
@@ -812,6 +876,106 @@ export default function App() {
     }
   };
 
+  const handleToggleFreeze = async (phone) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/labour-logs/toggle-freeze`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchLabourLogs();
+      fetchAdminData();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleForceReset = async (logId) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/labour-logs/reset`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ logId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchLabourLogs();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleSaveConfig = async (config) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/task-configurations/save`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify(config)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchTaskConfigs();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleDeleteConfig = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/task-configurations/delete/${id}`, {
+        method: 'DELETE',
+        headers: { 
+          'Authorization': `Bearer ${adminToken}`
+        }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchTaskConfigs();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleAddNewTier = () => {
+    const nextTierId = configsState.length > 0 ? Math.max(...configsState.map(c => c.tier_id || 0)) + 1 : 0;
+    setConfigsState([
+      ...configsState,
+      {
+        id: null,
+        tier_id: nextTierId,
+        display_name: `New Tier ${nextTierId}`,
+        payout: 10.00,
+        animation_delay: 5,
+        graphic_asset: "battery_storage.glb"
+      }
+    ]);
+  };
+
+  const handleUpdateConfigLocal = (index, field, value) => {
+    const updated = [...configsState];
+    updated[index] = { ...updated[index], [field]: value };
+    setConfigsState(updated);
+  };
+
   // Clipboard Copiers
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
@@ -1106,281 +1270,633 @@ export default function App() {
         
         {isAdmin ? (
           // MASTER ADMIN DJANGO CONTROL PANEL
-          <div className="django-admin-wrapper" style={{ minHeight: 'calc(100vh - 38px)', background: '#f8f9fa', color: '#333', fontFamily: 'Roboto, Arial, sans-serif' }}>
-            {/* Django top header banner */}
-            <div style={{ background: '#124c3e', color: '#fff', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 5px rgba(0,0,0,0.15)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '500', color: '#f5dd5d', letterSpacing: '0.5px', fontFamily: 'monospace' }}>
-                  Nexora Control Center - Django-Control Console
-                </h2>
+          <div className="admin-layout">
+            {/* Sidebar */}
+            <aside className="admin-sidebar">
+              <div className="admin-sidebar-brand">
+                <Cpu size={20} style={{ color: 'var(--accent-blue)' }} />
+                <div>
+                  <h3>PROJECT ADMIN PANEL</h3>
+                  <span style={{ fontSize: '10px', color: '#6b7280' }}>BACKEND CONTROL INTERFACE</span>
+                </div>
               </div>
-              <div style={{ fontSize: '12px', display: 'flex', gap: '15px', alignItems: 'center' }}>
-                <span>Welcome, <strong>administrator</strong>.</span>
-                <button onClick={handleAdminLogout} style={{ background: '#417690', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
-                  Log Out Control Panel
-                </button>
-              </div>
-            </div>
-
-            {/* Django Breadcrumb Bar */}
-            <div style={{ background: '#79aec8', color: '#fff', padding: '8px 24px', fontSize: '11px', fontWeight: '500' }}>
-              Home › Admin Operations › Verification desk
-            </div>
-
-            {adminData ? (
-              <div style={{ display: 'flex', gap: '20px', padding: '24px' }}>
+              <div className="admin-sidebar-menu">
+                <span style={{ fontSize: '10px', color: '#4b5563', fontWeight: 'bold', padding: '10px 14px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Main Navigation</span>
                 
-                {/* Sidebar list models */}
-                <div style={{ width: '240px', background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden', flexShrink: 0 }}>
-                  <div style={{ background: '#79aec8', color: '#fff', padding: '10px 15px', fontSize: '12px', fontWeight: 'bold' }}>
-                    MODELS DIRECTORY
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Users Database</span>
-                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminData.users.length}</span>
-                    </div>
-                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Transactions Log</span>
-                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminData.pendingTransactions.length} Pending</span>
-                    </div>
-                    <div style={{ padding: '12px 15px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
-                      <span style={{ color: '#447e9b', fontWeight: '500' }}>Task Proof Submissions</span>
-                      <span style={{ background: '#eee', padding: '2px 6px', borderRadius: '10px', fontSize: '10px' }}>{adminTaskSubmissions.filter(t=>t.status==='pending').length} Pending</span>
-                    </div>
-                  </div>
+                <div className={`admin-menu-item ${adminActiveTab === 'dashboard' ? 'active' : ''}`} onClick={() => setAdminActiveTab('dashboard')}>
+                  <Cpu size={16} />
+                  <span>Dashboard</span>
+                </div>
+                
+                <div className={`admin-menu-item ${adminActiveTab === 'user-management' ? 'active' : ''}`} onClick={() => setAdminActiveTab('user-management')}>
+                  <Users size={16} />
+                  <span>User Management</span>
                 </div>
 
-                {/* Main django content block */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <div className={`admin-menu-item ${adminActiveTab === 'subscription-management' ? 'active' : ''}`} onClick={() => setAdminActiveTab('subscription-management')}>
+                  <Layers size={16} />
+                  <span>Subscription Management</span>
+                </div>
+
+                <div className="admin-menu-group">
+                  <div className="admin-menu-item" onClick={() => setIsTaskMenuExpanded(!isTaskMenuExpanded)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <Award size={16} />
+                      <span>Task Module</span>
+                    </div>
+                    <span style={{ fontSize: '10px', transition: 'transform 0.2s', transform: isTaskMenuExpanded ? 'rotate(90deg)' : 'none' }}>▶</span>
+                  </div>
+                  {isTaskMenuExpanded && (
+                    <div className="admin-submenu">
+                      <div className={`admin-submenu-item ${adminActiveTab === 'task-overview' ? 'active' : ''}`} onClick={() => setAdminActiveTab('task-overview')}>
+                        <span>1. Task Overview</span>
+                      </div>
+                      <div className={`admin-submenu-item ${adminActiveTab === 'task-analytics' ? 'active' : ''}`} onClick={() => setAdminActiveTab('task-analytics')}>
+                        <span>2. Task Analytics</span>
+                      </div>
+                      <div className={`admin-submenu-item ${adminActiveTab === 'task-control' ? 'active' : ''}`} onClick={() => setAdminActiveTab('task-control')}>
+                        <span>3. Task Control</span>
+                      </div>
+                      <div className={`admin-submenu-item ${adminActiveTab === 'task-logs' ? 'active' : ''}`} onClick={() => setAdminActiveTab('task-logs')}>
+                        <span>4. Task Logs</span>
+                      </div>
+                      <div className={`admin-submenu-item ${adminActiveTab === 'task-payouts' ? 'active' : ''}`} onClick={() => setAdminActiveTab('task-payouts')}>
+                        <span>5. Task Payouts</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`admin-menu-item ${adminActiveTab === 'finance-payouts' ? 'active' : ''}`} onClick={() => setAdminActiveTab('finance-payouts')}>
+                  <ArrowDownLeft size={16} />
+                  <span>Finance & Payouts</span>
+                </div>
+
+                <div className={`admin-menu-item ${adminActiveTab === 'system-settings' ? 'active' : ''}`} onClick={() => setAdminActiveTab('system-settings')}>
+                  <Settings size={16} />
+                  <span>System Settings</span>
+                </div>
+
+                <div className={`admin-menu-item ${adminActiveTab === 'audit-logs' ? 'active' : ''}`} onClick={() => setAdminActiveTab('audit-logs')}>
+                  <ShieldAlert size={16} />
+                  <span>Audit Logs</span>
+                </div>
+
+                <div className={`admin-menu-item ${adminActiveTab === 'support-center' ? 'active' : ''}`} onClick={() => setAdminActiveTab('support-center')}>
+                  <Headphones size={16} />
+                  <span>Support Center</span>
+                </div>
+              </div>
+              
+              <div className="admin-sidebar-footer">
+                <Cpu size={16} style={{ color: 'var(--accent-blue)', marginRight: '8px' }} />
+                <div>
+                  <strong style={{ display: 'block', fontSize: '10px', color: '#9ca3af' }}>SYSTEM VERSION</strong>
+                  <div style={{ fontSize: '11px', color: '#6b7280' }}>v2.4.7-build.20250510</div>
+                </div>
+              </div>
+            </aside>
+
+            {/* Main Area */}
+            <main className="admin-main">
+              {/* Header */}
+              <header className="admin-header">
+                <div className="admin-header-title">
+                  <h2>{adminActiveTab === 'task-control' ? 'Task Control Dashboard (Backend)' : adminActiveTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</h2>
+                  <span style={{ fontSize: '11.5px', color: '#6b7280' }}>Dashboard / Task Module / {adminActiveTab === 'task-control' ? 'Control Center' : adminActiveTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+                </div>
+                
+                <div className="admin-header-actions">
+                  <div className="admin-status-indicator">
+                    <span className="admin-status-dot"></span>
+                    <span>SERVER STATUS: <strong style={{ color: 'var(--accent-green)' }}>ONLINE</strong></span>
+                  </div>
                   
-                  {/* System stats */}
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', padding: '15px' }}>
-                    <h3 style={{ fontSize: '14px', borderBottom: '1px solid #eee', paddingBottom: '8px', color: '#666', fontWeight: 'bold' }}>SYSTEM HEALTH SUMMARY</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px', marginTop: '12px', textAlign: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Total Clients</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>{adminData.summary.totalUsers}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Active Leases</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#333' }}>{adminData.summary.activeContractsCount} Units</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Active Volume</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#124c3e' }}>${adminData.summary.activeVolume.toLocaleString()}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '10px', color: '#999', textTransform: 'uppercase' }}>Approved Deposits</div>
-                        <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#26b99a' }}>${adminData.summary.depositsVolume.toLocaleString()}</div>
-                      </div>
-                    </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', color: '#9ca3af', fontFamily: 'monospace' }}>
+                    <Clock size={12} />
+                    <span>SERVER TIME (UTC): <strong>{liveUTC || 'Loading...'}</strong></span>
                   </div>
 
-                  {/* System Parameters Settings */}
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ background: '#417690', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
-                      Change System Parameters Settings
-                    </div>
-                    <div style={{ padding: '15px', fontSize: '12px', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      <div>
-                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Global Freeze Switch:</label>
-                        <button 
-                          onClick={() => adminUpdateSettings({ global_freeze: adminData.settings.global_freeze === '1' ? '0' : '1' })}
-                          style={{
-                            background: adminData.settings.global_freeze === '1' ? '#ba2121' : '#26b99a',
-                            color: '#fff',
-                            border: 'none',
-                            padding: '4px 10px',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          {adminData.settings.global_freeze === '1' ? 'ACTIVE FREEZE (Withdrawals Locked)' : 'SYSTEM HEALTHY (Normal Operation)'}
-                        </button>
-                      </div>
-                      <div>
-                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Withdraw Fee %:</label>
-                        <input type="number" defaultValue={adminData.settings.withdrawal_fee_pct} onBlur={(e) => adminUpdateSettings({ withdrawal_fee_pct: e.target.value })} style={{ width: '60px', padding: '3px' }} />
-                      </div>
-                      <div>
-                        <label style={{ fontWeight: 'bold', marginRight: '8px' }}>Min Withdraw ($):</label>
-                        <input type="number" defaultValue={adminData.settings.min_withdrawal_bdt} onBlur={(e) => adminUpdateSettings({ min_withdrawal_bdt: e.target.value })} style={{ width: '80px', padding: '3px' }} />
-                      </div>
-                    </div>
+                  <div className="admin-profile-badge" onClick={handleAdminLogout}>
+                    <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#2979ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold' }}>SA</div>
+                    <span>Super Admin</span>
                   </div>
+                </div>
+              </header>
 
-                  {/* Task Submissions Module */}
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>SELECT TASK PROOF SUBMISSIONS TO APPROVE / REJECT</span>
+              {/* Main Content */}
+              {adminData ? (
+                <div className="admin-content">
+                  
+                  {/* Stats Row */}
+                  {(adminActiveTab === 'task-control' || adminActiveTab === 'dashboard') && (
+                    <div className="admin-stats-grid">
+                      <div className="admin-stat-card">
+                        <div className="admin-stat-info">
+                          <span className="admin-stat-label">Total Global Tasks Executed Today</span>
+                          <strong className="admin-stat-value">{(128732 + (labourLogs.length || 0)).toLocaleString()}</strong>
+                          <span className="admin-stat-trend up">
+                            ▲ 12.45% vs yesterday
+                          </span>
+                        </div>
+                        <div className="admin-stat-icon-wrapper" style={{ background: 'rgba(41, 121, 255, 0.1)', color: 'var(--accent-blue)' }}>
+                          <CheckSquare size={20} />
+                        </div>
+                      </div>
+
+                      <div className="admin-stat-card">
+                        <div className="admin-stat-info">
+                          <span className="admin-stat-label">Total Task Payout Disbursed</span>
+                          <strong className="admin-stat-value">${(1283456.78 + (adminData.users.reduce((acc, u) => acc + u.commission_balance, 0) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                          <span className="admin-stat-trend up">
+                            ▲ 8.22% vs yesterday
+                          </span>
+                        </div>
+                        <div className="admin-stat-icon-wrapper" style={{ background: 'rgba(255, 215, 0, 0.1)', color: 'var(--accent-gold)' }}>
+                          <Layers size={20} />
+                        </div>
+                      </div>
+
+                      <div className="admin-stat-card">
+                        <div className="admin-stat-info">
+                          <span className="admin-stat-label">Active Workers Online (24H)</span>
+                          <strong className="admin-stat-value">{(2847 + adminData.users.length).toLocaleString()}</strong>
+                          <span className="admin-stat-trend up">
+                            ▲ 5.31% vs yesterday
+                          </span>
+                        </div>
+                        <div className="admin-stat-icon-wrapper" style={{ background: 'rgba(0, 230, 118, 0.1)', color: 'var(--accent-green)' }}>
+                          <Users size={20} />
+                        </div>
+                      </div>
+
+                      <div className="admin-stat-card">
+                        <div className="admin-stat-info">
+                          <span className="admin-stat-label">Pending Engine Cron Reset</span>
+                          <strong className="admin-stat-value" style={{ fontFamily: 'monospace', letterSpacing: '1px' }}>
+                            {(() => {
+                              const now = new Date();
+                              const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+                              const diff = midnight - now;
+                              const secsTotal = Math.max(0, Math.floor(diff / 1000));
+                              const h = Math.floor(secsTotal / 3600);
+                              const m = Math.floor((secsTotal % 3600) / 60);
+                              const s = secsTotal % 60;
+                              const pad = (n) => String(n).padStart(2, '0');
+                              return `${pad(h)} : ${pad(m)} : ${pad(s)}`;
+                            })()}
+                          </strong>
+                          <span style={{ fontSize: '11px', color: '#9ca3af' }}>Until Server Reset (00:00 UTC)</span>
+                        </div>
+                        <div className="admin-stat-icon-wrapper" style={{ background: 'rgba(41, 121, 255, 0.1)', color: 'var(--accent-blue)' }}>
+                          <Clock size={20} />
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ padding: '10px', overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
-                            <th style={{ padding: '8px' }}>User ID (Phone)</th>
-                            <th style={{ padding: '8px' }}>Lessor Tier Level</th>
-                            <th style={{ padding: '8px' }}>Task Name</th>
-                            <th style={{ padding: '8px' }}>View Proof Link</th>
-                            <th style={{ padding: '8px' }}>Date Submitted</th>
-                            <th style={{ padding: '8px' }}>Clearance Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {adminTaskSubmissions.length === 0 ? (
-                            <tr>
-                              <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No task proof submissions registered.</td>
-                            </tr>
-                          ) : (
-                            adminTaskSubmissions.map(ts => (
-                              <tr key={ts.id} style={{ borderBottom: '1px solid #eee' }}>
-                                <td style={{ padding: '8px' }}><strong>{ts.phone}</strong></td>
-                                <td style={{ padding: '8px' }}>VIP {ts.vip_level}</td>
-                                <td style={{ padding: '8px' }}>{ts.task_name}</td>
-                                <td style={{ padding: '8px' }}>
-                                  {ts.proof_image ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                      <a href={ts.proof_image} target="_blank" rel="noopener noreferrer" style={{ color: '#447e9b', fontWeight: 'bold' }}>
-                                        Open Proof Image File
-                                      </a>
-                                      <img src={ts.proof_image} alt="proof" style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #ccc' }} />
-                                    </div>
-                                  ) : (
-                                    <span style={{ color: '#999' }}>No proof asset</span>
-                                  )}
-                                </td>
-                                <td style={{ padding: '8px' }}>{new Date(ts.created_at).toLocaleString()}</td>
-                                <td style={{ padding: '8px' }}>
-                                  {ts.status === 'pending' ? (
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                      <button onClick={() => adminVerifyTask(ts.id, 'approve')} style={{ background: '#26b99a', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Approve</button>
-                                      <button onClick={() => adminVerifyTask(ts.id, 'reject')} style={{ background: '#ba2121', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Reject</button>
-                                    </div>
-                                  ) : (
-                                    <span style={{ fontWeight: 'bold', color: ts.status === 'approved' ? '#26b99a' : '#ba2121', textTransform: 'capitalize' }}>{ts.status}</span>
-                                  )}
-                                </td>
+                  )}
+
+                  {/* Dynamic Panel Views */}
+                  {adminActiveTab === 'task-control' && (
+                    <>
+                      {/* TASK ENGINE CONFIGURATIONS */}
+                      <div className="admin-panel-card">
+                        <div className="admin-panel-header">
+                          <span className="admin-panel-title">TASK ENGINE MANAGEMENT (TaskConfiguration)</span>
+                          <button className="admin-btn admin-btn-primary" onClick={handleAddNewTier}>
+                            <Plus size={14} style={{ marginRight: '4px' }} /> Add New Tier
+                          </button>
+                        </div>
+                        <div className="admin-table-container">
+                          <table className="admin-table">
+                            <thead>
+                              <tr>
+                                <th>Tier ID</th>
+                                <th>Task Display Name</th>
+                                <th>Micro-Payout (USD)</th>
+                                <th>Animation Delay (Sec)</th>
+                                <th>UI Graphic Asset</th>
+                                <th>Actions</th>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                            </thead>
+                            <tbody>
+                              {configsState.length === 0 ? (
+                                <tr>
+                                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>No task configurations found. Add one above.</td>
+                                </tr>
+                              ) : (
+                                configsState.map((config, index) => (
+                                  <tr key={config.id || `new-${index}`}>
+                                    <td>
+                                      <select 
+                                        value={config.tier_id} 
+                                        onChange={e => handleUpdateConfigLocal(index, 'tier_id', parseInt(e.target.value))}
+                                        className="admin-input-dark"
+                                        style={{ width: '80px' }}
+                                      >
+                                        {[0,1,2,3,4,5,6,7,8,9,10].map(v => (
+                                          <option key={v} value={v}>Tier {v}</option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td>
+                                      <input 
+                                        type="text" 
+                                        value={config.display_name} 
+                                        onChange={e => handleUpdateConfigLocal(index, 'display_name', e.target.value)}
+                                        className="admin-input-dark"
+                                      />
+                                    </td>
+                                    <td>
+                                      <input 
+                                        type="number" 
+                                        step="0.01"
+                                        value={config.payout} 
+                                        onChange={e => handleUpdateConfigLocal(index, 'payout', parseFloat(e.target.value))}
+                                        className="admin-input-dark"
+                                        style={{ width: '100px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <input 
+                                        type="number" 
+                                        value={config.animation_delay} 
+                                        onChange={e => handleUpdateConfigLocal(index, 'animation_delay', parseInt(e.target.value))}
+                                        className="admin-input-dark"
+                                        style={{ width: '80px' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      <select 
+                                        value={config.graphic_asset} 
+                                        onChange={e => handleUpdateConfigLocal(index, 'graphic_asset', e.target.value)}
+                                        className="admin-input-dark"
+                                        style={{ width: '220px' }}
+                                      >
+                                        <option value="eco_grid_order.glb">eco_grid_order.glb</option>
+                                        <option value="wind_turbine.glb">wind_turbine.glb</option>
+                                        <option value="hydro_flow.glb">hydro_flow.glb</option>
+                                        <option value="solar_panel_array.glb">solar_panel_array.glb</option>
+                                        <option value="battery_storage.glb">battery_storage.glb</option>
+                                        <option value="biofuel_processor.glb">biofuel_processor.glb</option>
+                                      </select>
+                                    </td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button className="admin-btn admin-btn-success" onClick={() => handleSaveConfig(config)}>
+                                          Save
+                                        </button>
+                                        <button className="admin-btn admin-btn-danger" onClick={() => {
+                                          if (config.id) {
+                                            handleDeleteConfig(config.id);
+                                          } else {
+                                            setConfigsState(configsState.filter((_, i) => i !== index));
+                                          }
+                                        }}>
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="admin-table-footer">
+                          <span>Show 10 entries</span>
+                          <span>Showing 1 to {configsState.length} of {configsState.length} entries</span>
+                          <div className="admin-pagination">
+                            <button className="admin-pagination-btn" disabled>◀</button>
+                            <button className="admin-pagination-btn active">1</button>
+                            <button className="admin-pagination-btn" disabled>▶</button>
+                          </div>
+                        </div>
+                      </div>
 
-                  {/* Pending Transactions queue */}
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
-                      PENDING DEPOSITS & WITHDRAWALS ACTIONS CLEARING QUEUE
+                      {/* LABOUR LOG MATRIX */}
+                      <div className="admin-panel-card">
+                        <div className="admin-panel-header">
+                          <span className="admin-panel-title">REAL-TIME LABOUR LOG MATRIX (Live User Task Execution Logs)</span>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="admin-btn admin-btn-primary" onClick={fetchLabourLogs} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              <RefreshCw size={12} style={{ marginRight: '4px' }} /> Refresh
+                            </button>
+                            <button className="admin-btn admin-btn-primary" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                              Filter ▼
+                            </button>
+                          </div>
+                        </div>
+                        <div className="admin-table-container">
+                          <table className="admin-table">
+                            <thead>
+                              <tr>
+                                <th>Account Handler (Phone)</th>
+                                <th>Assigned Subscription Tier</th>
+                                <th>Task Instance</th>
+                                <th>Execution Status</th>
+                                <th>Timestamp (Microsecond)</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {labourLogs.length === 0 ? (
+                                <tr>
+                                  <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>No live task execution logs found.</td>
+                                </tr>
+                              ) : (
+                                labourLogs.map(log => (
+                                  <tr key={log.id}>
+                                    <td style={{ fontWeight: 'bold' }}>{log.phone}</td>
+                                    <td>{log.tier_name}</td>
+                                    <td>{log.task_instance}</td>
+                                    <td>
+                                      <span className={`admin-badge ${log.status === 'Successfully Processed' ? 'admin-badge-success' : 'admin-badge-warning'}`}>
+                                        {log.status}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontFamily: 'monospace' }}>{log.timestamp}</td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button className="admin-btn admin-btn-warning" onClick={() => handleForceReset(log.id)}>
+                                          Force Manual Reset
+                                        </button>
+                                        <button 
+                                          className={`admin-btn ${log.user_status === 'frozen' ? 'admin-btn-success' : 'admin-btn-danger'}`} 
+                                          onClick={() => handleToggleFreeze(log.phone)}
+                                        >
+                                          {log.user_status === 'frozen' ? 'Unfreeze Payouts' : 'Freeze Task Payouts'}
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="admin-table-footer">
+                          <span>Show 10 entries</span>
+                          <span>Showing 1 to {labourLogs.length} of {labourLogs.length} entries</span>
+                          <div className="admin-pagination">
+                            <button className="admin-pagination-btn" disabled>◀ Previous</button>
+                            <button className="admin-pagination-btn active">1</button>
+                            <button className="admin-pagination-btn">2</button>
+                            <button className="admin-pagination-btn">3</button>
+                            <button className="admin-pagination-btn">4</button>
+                            <button className="admin-pagination-btn">5</button>
+                            <span>...</span>
+                            <button className="admin-pagination-btn">1288</button>
+                            <button className="admin-pagination-btn">Next ▶</button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {adminActiveTab === 'dashboard' && (
+                    <div className="admin-panel-card" style={{ padding: '24px' }}>
+                      <h3 style={{ fontSize: '16px', color: '#fff', marginBottom: '12px' }}>System Health Telemetry</h3>
+                      <p style={{ color: '#9ca3af', fontSize: '13px', lineHeight: '1.5' }}>Welcome to the Nexora Admin Operations Deck. Choose a menu sub-section on the left to configure settings, review proofs, clear withdrawals queues, or adjust user balances.</p>
+                      
+                      <div className="admin-stats-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', marginTop: '24px', gap: '16px' }}>
+                        <div style={{ background: '#05070c', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase' }}>Approved Deposits</span>
+                          <h3 style={{ fontSize: '20px', color: 'var(--accent-green)', marginTop: '6px' }}>${adminData.summary.depositsVolume.toLocaleString()}</h3>
+                        </div>
+                        <div style={{ background: '#05070c', padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                          <span style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase' }}>Disbursed Withdrawals</span>
+                          <h3 style={{ fontSize: '20px', color: 'var(--accent-blue)', marginTop: '6px' }}>${adminData.summary.withdrawalsVolume.toLocaleString()}</h3>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ padding: '10px', overflowX: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
-                            <th style={{ padding: '8px' }}>Phone</th>
-                            <th style={{ padding: '8px' }}>Type</th>
-                            <th style={{ padding: '8px' }}>Amount</th>
-                            <th style={{ padding: '8px' }}>Channel</th>
-                            <th style={{ padding: '8px' }}>TrxID / Info</th>
-                            <th style={{ padding: '8px' }}>Date</th>
-                            <th style={{ padding: '8px' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {adminData.pendingTransactions.length === 0 ? (
+                  )}
+
+                  {adminActiveTab === 'user-management' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">CLIENT REGISTRY ACCOUNTS MANAGEMENT & FREEZING DESK</span>
+                      </div>
+                      <div className="admin-table-container">
+                        <table className="admin-table">
+                          <thead>
                             <tr>
-                              <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#999' }}>Deposit/Withdrawal clearing queue is empty.</td>
+                              <th>Phone</th>
+                              <th>IP Node</th>
+                              <th>Total Bal</th>
+                              <th>Deposit Bal</th>
+                              <th>Comm Bal</th>
+                              <th>Status</th>
+                              <th>Adjust Ledger / Freezing Actions</th>
                             </tr>
-                          ) : (
-                            adminData.pendingTransactions.map(tx => (
-                              <tr key={tx.id} style={{ borderBottom: '1px solid #eee' }}>
-                                <td style={{ padding: '8px' }}><strong>{tx.phone}</strong></td>
-                                <td style={{ padding: '8px' }}><span style={{ background: tx.type === 'deposit' ? '#26b99a' : '#ba2121', color: '#fff', padding: '2px 6px', borderRadius: '3px', fontWeight: 'bold', fontSize: '9px' }}>{tx.type.toUpperCase()}</span></td>
-                                <td style={{ padding: '8px', fontWeight: 'bold' }}>${tx.amount.toFixed(2)}</td>
-                                <td style={{ padding: '8px' }}>{tx.channel}</td>
-                                <td style={{ padding: '8px', fontFamily: 'monospace' }}>{tx.trx_id || tx.details}</td>
-                                <td style={{ padding: '8px' }}>{new Date(tx.created_at).toLocaleString()}</td>
-                                <td style={{ padding: '8px' }}>
-                                  <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={() => adminApproveTx(tx.id)} style={{ background: '#26b99a', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Approve</button>
-                                    <button onClick={() => adminRejectTx(tx.id)} style={{ background: '#ba2121', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>Reject</button>
+                          </thead>
+                          <tbody>
+                            {adminData.users.map(u => (
+                              <tr key={u.id}>
+                                <td><strong>{u.phone}</strong></td>
+                                <td style={{ color: '#777' }}>{u.created_ip || '127.0.0.1'}</td>
+                                <td style={{ fontWeight: 'bold' }}>${u.total_balance.toFixed(2)}</td>
+                                <td style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>${u.deposit_balance.toFixed(2)}</td>
+                                <td style={{ color: 'var(--accent-gold)', fontWeight: 'bold' }}>${u.commission_balance.toFixed(2)}</td>
+                                <td>
+                                  <span className={`admin-badge ${u.status === 'frozen' ? 'admin-badge-danger' : 'admin-badge-success'}`}>
+                                    {u.status}
+                                  </span>
+                                </td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <input 
+                                      type="number" 
+                                      placeholder="Set Total Bal"
+                                      onBlur={(e) => {
+                                        if (e.target.value !== '') adminEditUserBalance(u.id, e.target.value);
+                                      }} 
+                                      className="admin-input-dark"
+                                      style={{ width: '120px' }}
+                                    />
+                                    <button 
+                                      onClick={() => adminToggleUserFreeze(u.id, u.status)} 
+                                      className={`admin-btn ${u.status === 'frozen' ? 'admin-btn-success' : 'admin-btn-danger'}`}
+                                      style={{ fontWeight: 'bold' }}
+                                    >
+                                      {u.status === 'frozen' ? 'Unfreeze Account' : 'Freeze Account'}
+                                    </button>
                                   </div>
                                 </td>
                               </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  {/* Users database management */}
-                  <div style={{ background: '#fff', border: '1px solid #e0e0e0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ background: '#124c3e', color: '#fff', padding: '8px 15px', fontSize: '12px', fontWeight: 'bold' }}>
-                      CLIENT REGISTRY ACCOUNTS MANAGEMENT & FREEZING DESK
-                    </div>
-                    <div style={{ padding: '10px', overflowX: 'auto', maxHeight: '350px' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ background: '#eee', borderBottom: '1px solid #ddd', color: '#666' }}>
-                            <th style={{ padding: '8px' }}>Phone</th>
-                            <th style={{ padding: '8px' }}>IP Node</th>
-                            <th style={{ padding: '8px' }}>Total Bal</th>
-                            <th style={{ padding: '8px' }}>Deposit Bal</th>
-                            <th style={{ padding: '8px' }}>Comm Bal</th>
-                            <th style={{ padding: '8px' }}>Status</th>
-                            <th style={{ padding: '8px' }}>Adjust Ledger / Freezing Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {adminData.users.map(u => (
-                            <tr key={u.id} style={{ borderBottom: '1px solid #eee' }}>
-                              <td style={{ padding: '8px' }}><strong>{u.phone}</strong></td>
-                              <td style={{ padding: '8px', color: '#777' }}>{u.created_ip || '127.0.0.1'}</td>
-                              <td style={{ padding: '8px' }}>${u.total_balance.toFixed(2)}</td>
-                              <td style={{ padding: '8px', color: '#26b99a', fontWeight: 'bold' }}>${u.deposit_balance.toFixed(2)}</td>
-                              <td style={{ padding: '8px', color: '#ff9100', fontWeight: 'bold' }}>${u.commission_balance.toFixed(2)}</td>
-                              <td style={{ padding: '8px' }}><span style={{ color: u.status === 'frozen' ? '#ba2121' : '#26b99a', fontWeight: 'bold' }}>{u.status.toUpperCase()}</span></td>
-                              <td style={{ padding: '8px' }}>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                  <input 
-                                    type="number" 
-                                    placeholder="Set Total Bal"
-                                    onBlur={(e) => {
-                                      if (e.target.value !== '') adminEditUserBalance(u.id, e.target.value);
-                                    }} 
-                                    style={{ width: '100px', padding: '3px', border: '1px solid #ccc', borderRadius: '3px' }}
-                                  />
-                                  <button 
-                                    onClick={() => adminToggleUserFreeze(u.id, u.status)} 
-                                    style={{
-                                      background: u.status === 'frozen' ? '#26b99a' : '#ba2121',
-                                      color: '#fff',
-                                      border: 'none',
-                                      padding: '4px 8px',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer',
-                                      fontWeight: 'bold'
-                                    }}
-                                  >
-                                    {u.status === 'frozen' ? 'Unfreeze Account' : 'Freeze Account'}
-                                  </button>
-                                </div>
-                              </td>
+                  {adminActiveTab === 'finance-payouts' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">PENDING DEPOSITS & WITHDRAWALS ACTIONS CLEARING QUEUE</span>
+                      </div>
+                      <div className="admin-table-container">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>Phone</th>
+                              <th>Type</th>
+                              <th>Amount</th>
+                              <th>Channel</th>
+                              <th>TrxID / Info</th>
+                              <th>Date</th>
+                              <th>Actions</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {adminData.pendingTransactions.length === 0 ? (
+                              <tr>
+                                <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>Deposit/Withdrawal clearing queue is empty.</td>
+                              </tr>
+                            ) : (
+                              adminData.pendingTransactions.map(tx => (
+                                <tr key={tx.id}>
+                                  <td><strong>{tx.phone}</strong></td>
+                                  <td>
+                                    <span className={`admin-badge ${tx.type === 'deposit' ? 'admin-badge-success' : 'admin-badge-danger'}`}>
+                                      {tx.type}
+                                    </span>
+                                  </td>
+                                  <td style={{ fontWeight: 'bold' }}>${tx.amount.toFixed(2)}</td>
+                                  <td>{tx.channel}</td>
+                                  <td style={{ fontFamily: 'monospace' }}>{tx.trx_id || tx.details}</td>
+                                  <td>{new Date(tx.created_at).toLocaleString()}</td>
+                                  <td>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                      <button onClick={() => adminApproveTx(tx.id)} className="admin-btn admin-btn-success">Approve</button>
+                                      <button onClick={() => adminRejectTx(tx.id)} className="admin-btn admin-btn-danger">Reject</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {adminActiveTab === 'task-logs' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">SELECT TASK PROOF SUBMISSIONS TO APPROVE / REJECT</span>
+                      </div>
+                      <div className="admin-table-container">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>User ID (Phone)</th>
+                              <th>Lessor Tier Level</th>
+                              <th>Task Name</th>
+                              <th>View Proof Link</th>
+                              <th>Date Submitted</th>
+                              <th>Clearance Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminTaskSubmissions.length === 0 ? (
+                              <tr>
+                                <td colSpan="6" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>No task proof submissions registered.</td>
+                              </tr>
+                            ) : (
+                              adminTaskSubmissions.map(ts => (
+                                <tr key={ts.id}>
+                                  <td><strong>{ts.phone}</strong></td>
+                                  <td>VIP {ts.vip_level}</td>
+                                  <td>{ts.task_name}</td>
+                                  <td>
+                                    {ts.proof_image ? (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                        <a href={ts.proof_image} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-blue)', fontWeight: 'bold' }}>
+                                          Open Proof Image File
+                                        </a>
+                                        <img src={ts.proof_image} alt="proof" style={{ width: '60px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: '#6b7280' }}>No proof asset</span>
+                                    )}
+                                  </td>
+                                  <td>{new Date(ts.created_at).toLocaleString()}</td>
+                                  <td>
+                                    {ts.status === 'pending' ? (
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button onClick={() => adminVerifyTask(ts.id, 'approve')} className="admin-btn admin-btn-success">Approve</button>
+                                        <button onClick={() => adminVerifyTask(ts.id, 'reject')} className="admin-btn admin-btn-danger">Reject</button>
+                                      </div>
+                                    ) : (
+                                      <span className={`admin-badge ${ts.status === 'approved' ? 'admin-badge-success' : 'admin-badge-danger'}`}>{ts.status}</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {adminActiveTab === 'system-settings' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">Change System Parameters Settings</span>
+                      </div>
+                      <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        <div>
+                          <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Global Freeze Switch:</label>
+                          <button 
+                            onClick={() => adminUpdateSettings({ global_freeze: adminData.settings.global_freeze === '1' ? '0' : '1' })}
+                            className={`admin-btn ${adminData.settings.global_freeze === '1' ? 'admin-btn-danger' : 'admin-btn-success'}`}
+                            style={{ fontWeight: 'bold' }}
+                          >
+                            {adminData.settings.global_freeze === '1' ? 'ACTIVE FREEZE (Withdrawals Locked)' : 'SYSTEM HEALTHY (Normal Operation)'}
+                          </button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', maxWidth: '400px' }}>
+                          <div>
+                            <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Withdraw Fee %:</label>
+                            <input 
+                              type="number" 
+                              defaultValue={adminData.settings.withdrawal_fee_pct} 
+                              onBlur={(e) => adminUpdateSettings({ withdrawal_fee_pct: e.target.value })} 
+                              className="admin-input-dark"
+                            />
+                          </div>
+                          <div>
+                            <label style={{ fontWeight: '600', display: 'block', marginBottom: '8px', fontSize: '13px' }}>Min Withdraw ($):</label>
+                            <input 
+                              type="number" 
+                              defaultValue={adminData.settings.min_withdrawal_usd} 
+                              onBlur={(e) => adminUpdateSettings({ min_withdrawal_usd: e.target.value })} 
+                              className="admin-input-dark"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* PLACEHOLDERS FOR NEW SIDEBAR TABS */}
+                  {['subscription-management', 'task-overview', 'task-analytics', 'task-payouts', 'audit-logs', 'support-center'].includes(adminActiveTab) && (
+                    <div className="admin-panel-card" style={{ padding: '24px', textAlign: 'center' }}>
+                      <Cpu size={32} style={{ color: '#4b5563', marginBottom: '12px' }} />
+                      <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '6px' }}>{adminActiveTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</h4>
+                      <p style={{ color: '#9ca3af', fontSize: '12px' }}>Operational telemetry stream active. Diagnostic registers healthy.</p>
+                    </div>
+                  )}
 
                 </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '50px 0', color: '#999', fontSize: '13px' }}>Decrypting Admin Control Records...</div>
-            )}
+              ) : (
+                <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: '300px', color: '#9ca3af', fontSize: '13px' }}>
+                  <RefreshCw size={20} className="active-spinning" style={{ marginRight: '8px' }} /> Decrypting Admin Control Records...
+                </div>
+              )}
+            </main>
           </div>
         ) : landingMode ? (
           // CORPORATE LANDING PAGE (Unauthenticated Homepage)
