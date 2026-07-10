@@ -5,7 +5,7 @@ import {
   Check, X, Award, Handshake, Info, Headphones, Settings,
   FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List,
   Clock, Trash2, Leaf, House, Sun, Droplet, Wind, WavesHorizontal, Flame,
-  Server, Gem, Globe, ListFilter, DollarSign, TrendingUp, Calendar
+  Server, Gem, Globe, ListFilter, DollarSign, TrendingUp, Calendar, Wallet
 } from 'lucide-react';
 
 import energyBanner from './assets/energy_banner.png';
@@ -2774,38 +2774,48 @@ export default function App() {
               return (
                 <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   
-                  <div className="projects-tab-header">
-                    <h3>Lessor Task Rewards Terminal</h3>
-                    <p style={{ color: 'var(--text-muted)' }}>Perform grid synchronization and social promotion actions to earn additional spendable credits directly into your wallet.</p>
-                  </div>
-
-                  {/* PREMIUM STATS WHITE CARD (Centered horizontal card) */}
-                  <div className="top-stats-card-white">
-                    <div className="top-stats-col">
-                      <span className="top-stats-label">All tasks for today:</span>
-                      <strong className="top-stats-value">{user ? user.all_tasks_count : 0} Tasks</strong>
+                  {/* PREMIUM STATS ROW (Two cards side-by-side) */}
+                  <div className="task-stats-row">
+                    <div className="glass-card task-stat-card">
+                      <div className="task-stat-icon-wrapper clipboard" style={{ color: '#06b6d4', borderColor: 'rgba(6, 182, 212, 0.3)', background: 'rgba(6, 182, 212, 0.08)' }}>
+                        <CheckSquare size={24} />
+                      </div>
+                      <div className="task-stat-info">
+                        <span className="task-stat-title">All tasks for today:</span>
+                        <div className="task-stat-value-wrap">
+                          <span className="task-stat-value" style={{ fontSize: '24px', fontWeight: 'bold' }}>{user ? user.all_tasks_count : 0}</span>
+                          <span className="task-stat-unit" style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '4px' }}>Tasks</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="top-stats-divider"></div>
-                    <div className="top-stats-col">
-                      <span className="top-stats-label">Today's remaining tasks:</span>
-                      <strong className="top-stats-value" style={{ color: 'var(--accent-cyan)' }}>{user ? user.remaining_tasks_count : 0} Tasks</strong>
+
+                    <div className="glass-card task-stat-card">
+                      <div className="task-stat-icon-wrapper clock">
+                        <Clock size={24} />
+                      </div>
+                      <div className="task-stat-info">
+                        <span className="task-stat-title">Today's remaining tasks:</span>
+                        <div className="task-stat-value-wrap">
+                          <span className="task-stat-value" style={{ fontSize: '24px', fontWeight: 'bold' }}>{user ? user.remaining_tasks_count : 0}</span>
+                          <span className="task-stat-unit" style={{ fontSize: '12px', color: 'var(--text-muted)', marginLeft: '4px' }}>Tasks</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                   {/* TAB SWITCHER */}
-                  <div className="task-tab-switcher-v3">
+                  <div className="task-tab-switcher-v4">
                     <button 
                       type="button"
                       onClick={() => setTaskSubTab('in-progress')}
-                      className={`task-tab-btn-v3 ${taskSubTab === 'in-progress' ? 'active' : ''}`}
+                      className={`task-tab-btn-v4 ${taskSubTab === 'in-progress' ? 'active' : ''}`}
                     >
                       In progress
                     </button>
                     <button 
                       type="button"
                       onClick={() => setTaskSubTab('completed')}
-                      className={`task-tab-btn-v3 ${taskSubTab === 'completed' ? 'active' : ''}`}
-                      style={taskSubTab !== 'completed' ? { background: '#D8D8E6', color: '#1E293B' } : {}}
+                      className={`task-tab-btn-v4 ${taskSubTab === 'completed' ? 'active' : ''}`}
                     >
                       Completed
                     </button>
@@ -2815,63 +2825,91 @@ export default function App() {
                   <div className="task-cards-list">
                     {taskSubTab === 'in-progress' && (
                       <>
-                        {/* Empty state check */}
-                        {(dailyTasks.incomplete || []).length === 0 ? (
-                          <div className="bengali-empty-state" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '18px', fontWeight: 'bold' }}>
-                            কোন তথ্য নেই
-                          </div>
-                        ) : (
-                          (dailyTasks.incomplete || []).map(task => {
-                            const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
-                              title: `NEXORA ${task.tier_name.toUpperCase()}:`,
-                              desc: 'Match Telemetry Grid Sync',
-                              img: taskSolarImg,
-                              badge: 'ACTIVE'
-                            };
+                        {(dailyTasks.incomplete || []).map(task => {
+                          const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
+                            title: `NEXORA ${task.tier_name.toUpperCase()}:`,
+                            desc: 'Match Telemetry Grid Sync',
+                            img: taskSolarImg,
+                            badge: 'ACTIVE'
+                          };
 
-                            return (
-                              <div key={`task-item-${task.id}`} className="task-card-v3 rounded-2xl">
-                                <div className="task-card-image-wrap">
-                                  <img src={tierDetails.img} alt="asset" className="task-card-image" />
+                          return (
+                            <div key={`task-item-${task.id}`} className="task-card-v4">
+                              <div className="task-card-v4-image-wrap">
+                                <img src={tierDetails.img} alt="asset" className="task-card-v4-image" />
+                              </div>
+                              
+                              <div className="task-card-v4-info">
+                                <div className="task-card-v4-header">
+                                  <span className="task-card-v4-badge">{tierDetails.badge}</span>
+                                  <span className="task-card-v4-title">{tierDetails.title}</span>
                                 </div>
-                                <div className="task-card-info-wrap">
-                                  <span className="task-card-badge">{tierDetails.badge}</span>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                    <span className="task-card-title">{tierDetails.title} {tierDetails.desc}</span>
-                                    <h4 className="task-card-desc reward-label-v3">REWARD: +${task.reward.toFixed(2)} USD</h4>
+                                <h4 className="task-card-v4-desc">{tierDetails.desc}</h4>
+                                
+                                <div className="task-card-v4-spec-list">
+                                  <div className="task-card-v4-spec-item">
+                                    <div className="task-card-v4-spec-icon" style={{ color: '#10B981' }}>
+                                      <Wallet size={14} />
+                                    </div>
+                                    <span className="task-card-v4-spec-label">Reward</span>
+                                    <span className="task-card-v4-spec-value reward">+${task.reward.toFixed(2)} USD</span>
+                                  </div>
+                                  <div className="task-card-v4-spec-item">
+                                    <div className="task-card-v4-spec-icon" style={{ color: '#06B6D4' }}>
+                                      <Calendar size={14} />
+                                    </div>
+                                    <span className="task-card-v4-spec-label">Deadline</span>
+                                    <span className="task-card-v4-spec-value">Today, 11:59 PM</span>
                                   </div>
                                 </div>
-                                <div className="task-card-action-wrap">
-                                  <button 
-                                    type="button"
-                                    onClick={() => handleRunTask(task)}
-                                    className="task-action-btn-neon"
-                                  >
-                                    START TASK
-                                  </button>
-                                </div>
                               </div>
-                            );
-                          })
-                        )}
+
+                              <div className="task-card-v4-action">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleRunTask(task)}
+                                  className="task-card-v4-btn"
+                                >
+                                  START TASK &gt;
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
 
                         {/* 2. Locked Tasks */}
                         {canonicalTiers.filter(tier => tier.price > 0 && !contracts.some(c => c.tier_name === tier.name && c.status === 'active')).map(tier => (
-                          <div key={`locked-task-${tier.id}`} className="task-card-v3 locked rounded-2xl">
-                            <div className="task-card-image-wrap">
-                              <img src={tier.img} alt="asset" className="task-card-image" style={{ filter: 'grayscale(0.6) brightness(0.6)' }} />
-                              <div style={{ position: 'absolute', background: 'rgba(0,0,0,0.6)', padding: '8px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)' }}>
-                                <Lock size={16} style={{ color: 'var(--text-muted)' }} />
+                          <div key={`locked-task-${tier.id}`} className="task-card-v4 locked">
+                            <div className="task-card-v4-image-wrap" style={{ opacity: 0.5 }}>
+                              <img src={tier.img} alt="asset" className="task-card-v4-image" style={{ filter: 'grayscale(0.6) brightness(0.6)' }} />
+                            </div>
+                            
+                            <div className="task-card-v4-info" style={{ opacity: 0.5 }}>
+                              <div className="task-card-v4-header">
+                                <span className="task-card-v4-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
+                                <span className="task-card-v4-title" style={{ color: 'var(--text-muted)' }}>{tier.title}</span>
+                              </div>
+                              <h4 className="task-card-v4-desc" style={{ color: 'var(--text-muted)' }}>{tier.desc}</h4>
+                              
+                              <div className="task-card-v4-spec-list">
+                                <div className="task-card-v4-spec-item">
+                                  <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
+                                    <Wallet size={14} />
+                                  </div>
+                                  <span className="task-card-v4-spec-label">Reward</span>
+                                  <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>+${tier.daily_return.toFixed(2)} USD</span>
+                                </div>
+                                <div className="task-card-v4-spec-item">
+                                  <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
+                                    <Calendar size={14} />
+                                  </div>
+                                  <span className="task-card-v4-spec-label">Deadline</span>
+                                  <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>Today, 11:59 PM</span>
+                                </div>
                               </div>
                             </div>
-                            <div className="task-card-info-wrap">
-                              <span className="task-card-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span className="task-card-title" style={{ color: 'var(--text-muted)' }}>{tier.title} {tier.desc}</span>
-                                <h4 className="task-card-desc" style={{ color: 'var(--text-muted)' }}>REWARD: +${tier.daily_return.toFixed(2)} USD</h4>
-                              </div>
-                            </div>
-                            <div className="task-card-action-wrap">
+
+                            <div className="task-card-v4-action">
                               <button 
                                 type="button"
                                 onClick={() => {
@@ -2880,9 +2918,9 @@ export default function App() {
                                     setActiveTab('invest');
                                   }, 1500);
                                 }}
-                                className="task-action-btn locked"
+                                className="task-card-v4-btn locked"
                               >
-                                Unlock Tier <ArrowUpRight size={14} />
+                                Unlock Tier &gt;
                               </button>
                             </div>
                           </div>
@@ -2892,41 +2930,53 @@ export default function App() {
 
                     {taskSubTab === 'completed' && (
                       <>
-                        {/* Empty state check */}
-                        {(dailyTasks.completed || []).length === 0 ? (
-                          <div className="bengali-empty-state" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '18px', fontWeight: 'bold' }}>
-                            কোন তথ্য নেই
-                          </div>
-                        ) : (
-                          (dailyTasks.completed || []).map(task => {
-                            const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
-                              title: `NEXORA ${task.tier_name.toUpperCase()}:`,
-                              desc: 'Match Telemetry Grid Sync',
-                              img: taskSolarImg,
-                              badge: 'COMPLETED'
-                            };
+                        {(dailyTasks.completed || []).map(task => {
+                          const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
+                            title: `NEXORA ${task.tier_name.toUpperCase()}:`,
+                            desc: 'Match Telemetry Grid Sync',
+                            img: taskSolarImg,
+                            badge: 'COMPLETED'
+                          };
 
-                            return (
-                              <div key={`completed-task-${task.id}`} className="task-card-v3 completed rounded-2xl">
-                                <div className="task-card-image-wrap">
-                                  <img src={tierDetails.img} alt="asset" className="task-card-image" style={{ filter: 'brightness(0.7)' }} />
+                          return (
+                            <div key={`completed-task-${task.id}`} className="task-card-v4 completed">
+                              <div className="task-card-v4-image-wrap">
+                                  <img src={tierDetails.img} alt="asset" className="task-card-v4-image" style={{ filter: 'brightness(0.7)' }} />
+                              </div>
+                              
+                              <div className="task-card-v4-info">
+                                <div className="task-card-v4-header">
+                                  <span className="task-card-v4-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>COMPLETED</span>
+                                  <span className="task-card-v4-title">{tierDetails.title}</span>
                                 </div>
-                                <div className="task-card-info-wrap">
-                                  <span className="task-card-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>COMPLETED</span>
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                    <span className="task-card-title">{tierDetails.title} {tierDetails.desc}</span>
-                                    <h4 className="task-card-desc" style={{ color: 'var(--accent-green)' }}>REWARD CLAIMED: +${task.reward.toFixed(2)} USD</h4>
+                                <h4 className="task-card-v4-desc">{tierDetails.desc}</h4>
+                                
+                                <div className="task-card-v4-spec-list">
+                                  <div className="task-card-v4-spec-item">
+                                    <div className="task-card-v4-spec-icon" style={{ color: '#10B981' }}>
+                                      <Wallet size={14} />
+                                    </div>
+                                    <span className="task-card-v4-spec-label">Reward Claimed</span>
+                                    <span className="task-card-v4-spec-value reward">+${task.reward.toFixed(2)} USD</span>
+                                  </div>
+                                  <div className="task-card-v4-spec-item">
+                                    <div className="task-card-v4-spec-icon" style={{ color: '#06B6D4' }}>
+                                      <Calendar size={14} />
+                                    </div>
+                                    <span className="task-card-v4-spec-label">Claimed At</span>
+                                    <span className="task-card-v4-spec-value">Today</span>
                                   </div>
                                 </div>
-                                <div className="task-card-action-wrap">
-                                  <button type="button" disabled className="task-action-btn completed">
-                                    Completed <Check size={14} />
-                                  </button>
-                                </div>
                               </div>
-                            );
-                          })
-                        )}
+
+                              <div className="task-card-v4-action">
+                                <button type="button" disabled className="task-card-v4-btn completed">
+                                  Completed ✓
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </>
                     )}
                   </div>
