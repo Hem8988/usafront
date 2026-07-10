@@ -2468,3 +2468,129 @@ select.glass-input {
     width: 100%;
   }
 }
+
+/* White Stats Card Styles */
+.top-stats-card-white {
+  background: #FFFFFF !important;
+  border-radius: 12px !important;
+  border: 1.5px solid #000000 !important;
+  box-shadow: 6px 6px 0px #000000 !important;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-around;
+  align-items: center;
+  width: 100%;
+  padding: 20px 24px;
+  color: #0F172A !important;
+  margin: 10px 0 20px 0;
+  text-align: center;
+}
+
+.top-stats-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.top-stats-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+}
+
+.top-stats-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0F172A;
+}
+
+.top-stats-divider {
+  width: 1.5px;
+  height: 40px;
+  background-color: #E2E8F0;
+}
+
+/* Dual Sub-Tab Switcher V3 */
+.task-tab-switcher-v3 {
+  display: flex;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 6px;
+  gap: 6px;
+  margin: 10px 0 20px 0;
+}
+
+.task-tab-btn-v3 {
+  flex: 1;
+  padding: 12px 24px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  background: transparent;
+  border: 2px solid transparent;
+  color: #94A3B8;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+}
+
+.task-tab-btn-v3.active {
+  background: #FFFFFF !important;
+  border: 2px solid #000000 !important;
+  color: #0F172A !important;
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+/* Frosted glass task card customizations */
+.task-card-v3.rounded-2xl {
+  background: rgba(30, 41, 59, 0.45) !important;
+  border: 1px solid #334155 !important;
+  backdrop-filter: blur(16px);
+  border-radius: 16px !important;
+}
+
+/* Reward payout bold green label */
+.reward-label-v3 {
+  color: #10B981 !important;
+  font-weight: 800 !important;
+  font-size: 15px !important;
+  margin-top: 6px;
+  letter-spacing: 0.5px;
+}
+
+/* Neon start button */
+.task-action-btn-neon {
+  background: #06B6D4 !important;
+  color: #0F172A !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+  padding: 12px 24px !important;
+  border-radius: 8px !important;
+  border: none !important;
+  cursor: pointer !important;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.4) !important;
+  transition: all 0.2s ease-in-out !important;
+}
+
+.task-action-btn-neon:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.7) !important;
+}
+
+.task-action-btn-neon:active {
+  transform: scale(0.95);
+}
+
+/* Bengali fallback empty state */
+.bengali-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #94A3B8;
+  font-size: 18px;
+  font-weight: 700;
+}
+

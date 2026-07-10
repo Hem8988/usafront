@@ -111,6 +111,9 @@ export default function App() {
   // User Tasks tab states
   const [taskSubTab, setTaskSubTab] = useState('in-progress');
   const [runningTasks, setRunningTasks] = useState({});
+  const [dailyTasks, setDailyTasks] = useState({ incomplete: [], completed: [] });
+  const [countdownTask, setCountdownTask] = useState(null);
+  const [countdownSeconds, setCountdownSeconds] = useState(5);
 
   // Live Lists
   const [contracts, setContracts] = useState([]);
@@ -177,12 +180,14 @@ export default function App() {
       fetchUserContracts();
       fetchUserTxHistory();
       fetchVaultLocks();
+      fetchDailyTasks();
       setLandingMode(false);
     } else {
       setUser(null);
       setContracts([]);
       setTransactions([]);
       setVaultLocks([]);
+      setDailyTasks({ incomplete: [], completed: [] });
     }
   }, [token]);
 
@@ -337,6 +342,21 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setVaultLocks(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchDailyTasks = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/tasks`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDailyTasks(data);
       }
     } catch (err) {
       console.error(err);
@@ -808,47 +828,45 @@ export default function App() {
     }
   };
 
-  // Perform Daily Contract Grid Task Simulation
-  const handleRunTask = (contractId) => {
-    if (runningTasks[contractId] !== undefined) return;
-
-    setRunningTasks(prev => ({ ...prev, [contractId]: 0 }));
-
-    let progress = 0;
+  // Perform Daily Contract Grid Task Simulation (5-Second countdown + api claims)
+  const handleRunTask = (task) => {
+    setCountdownTask(task);
+    setCountdownSeconds(5);
+    
     const interval = setInterval(() => {
-      progress += 10;
-      setRunningTasks(prev => ({ ...prev, [contractId]: progress }));
-      if (progress >= 100) {
-        clearInterval(interval);
-        setTimeout(async () => {
-          try {
-            const res = await fetch(`${API_BASE}/invest/claim`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({ contractId })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error);
+      setCountdownSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          executeTaskCompletion(task.id);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
-            showStatus(`Grid synchronization complete! Yield successfully credited.`);
-            fetchUserProfile();
-            fetchUserContracts();
-            fetchUserTxHistory();
-          } catch (err) {
-            showStatus(err.message, 'error');
-          } finally {
-            setRunningTasks(prev => {
-              const updated = { ...prev };
-              delete updated[contractId];
-              return updated;
-            });
-          }
-        }, 300);
-      }
-    }, 250);
+  const executeTaskCompletion = async (taskId) => {
+    try {
+      const res = await fetch(`${API_BASE}/tasks/run`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ taskId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message, 'success');
+      fetchUserProfile();
+      fetchDailyTasks();
+      fetchUserTxHistory();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    } finally {
+      setCountdownTask(null);
+    }
   };
 
   // Deposit Submission
@@ -1112,6 +1130,44 @@ export default function App() {
           'Authorization': `Bearer ${adminToken}`
         },
         body: JSON.stringify({ logId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchLabourLogs();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleResetUserCounters = async (phone) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/tasks/reset-user`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      showStatus(data.message);
+      fetchLabourLogs();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleGlobalTasksReset = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/tasks/global-reset`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${adminToken}`
+        }
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1727,6 +1783,9 @@ export default function App() {
                         <div className="admin-panel-header">
                           <span className="admin-panel-title">REAL-TIME LABOUR LOG MATRIX (Live User Task Execution Logs)</span>
                           <div style={{ display: 'flex', gap: '8px' }}>
+                            <button className="admin-btn admin-btn-danger" onClick={handleGlobalTasksReset} style={{ background: 'var(--accent-red)', fontWeight: 'bold' }}>
+                              FORCE MANUALLY RESET GLOBAL DAILY TASKS
+                            </button>
                             <button className="admin-btn admin-btn-primary" onClick={fetchLabourLogs} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
                               <RefreshCw size={12} style={{ marginRight: '4px' }} /> Refresh
                             </button>
@@ -1765,9 +1824,12 @@ export default function App() {
                                     </td>
                                     <td style={{ fontFamily: 'monospace' }}>{log.timestamp}</td>
                                     <td>
-                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         <button className="admin-btn admin-btn-warning" onClick={() => handleForceReset(log.id)}>
                                           Force Manual Reset
+                                        </button>
+                                        <button className="admin-btn admin-btn-primary" style={{ background: 'var(--accent-cyan)', color: '#000' }} onClick={() => handleResetUserCounters(log.phone)}>
+                                          Force Reset Counters
                                         </button>
                                         <button 
                                           className={`admin-btn ${log.user_status === 'frozen' ? 'admin-btn-success' : 'admin-btn-danger'}`} 
@@ -2717,48 +2779,33 @@ export default function App() {
                     <p style={{ color: 'var(--text-muted)' }}>Perform grid synchronization and social promotion actions to earn additional spendable credits directly into your wallet.</p>
                   </div>
 
-                  {/* PREMIUM STATS ROW */}
-                  <div className="task-stats-row">
-                    <div className="glass-card task-stat-card">
-                      <div className="task-stat-icon-wrapper clipboard">
-                        <CheckSquare size={24} />
-                      </div>
-                      <div className="task-stat-info">
-                        <span className="task-stat-title">All tasks for today:</span>
-                        <div className="task-stat-value-wrap">
-                          <span className="task-stat-value">{activeUserContracts.length}</span>
-                          <span className="task-stat-unit">Tasks</span>
-                        </div>
-                      </div>
+                  {/* PREMIUM STATS WHITE CARD (Centered horizontal card) */}
+                  <div className="top-stats-card-white">
+                    <div className="top-stats-col">
+                      <span className="top-stats-label">All tasks for today:</span>
+                      <strong className="top-stats-value">{user ? user.all_tasks_count : 0} Tasks</strong>
                     </div>
-
-                    <div className="glass-card task-stat-card">
-                      <div className="task-stat-icon-wrapper clock">
-                        <Clock size={24} />
-                      </div>
-                      <div className="task-stat-info">
-                        <span className="task-stat-title">Today's remaining tasks:</span>
-                        <div className="task-stat-value-wrap">
-                          <span className="task-stat-value">{inProgressContracts.length}</span>
-                          <span className="task-stat-unit">Tasks</span>
-                        </div>
-                      </div>
+                    <div className="top-stats-divider"></div>
+                    <div className="top-stats-col">
+                      <span className="top-stats-label">Today's remaining tasks:</span>
+                      <strong className="top-stats-value" style={{ color: 'var(--accent-cyan)' }}>{user ? user.remaining_tasks_count : 0} Tasks</strong>
                     </div>
                   </div>
 
                   {/* TAB SWITCHER */}
-                  <div className="task-tab-switcher">
+                  <div className="task-tab-switcher-v3">
                     <button 
                       type="button"
                       onClick={() => setTaskSubTab('in-progress')}
-                      className={`task-tab-btn ${taskSubTab === 'in-progress' ? 'active' : ''}`}
+                      className={`task-tab-btn-v3 ${taskSubTab === 'in-progress' ? 'active' : ''}`}
                     >
                       In progress
                     </button>
                     <button 
                       type="button"
                       onClick={() => setTaskSubTab('completed')}
-                      className={`task-tab-btn ${taskSubTab === 'completed' ? 'active' : ''}`}
+                      className={`task-tab-btn-v3 ${taskSubTab === 'completed' ? 'active' : ''}`}
+                      style={taskSubTab !== 'completed' ? { background: '#D8D8E6', color: '#1E293B' } : {}}
                     >
                       Completed
                     </button>
@@ -2768,75 +2815,49 @@ export default function App() {
                   <div className="task-cards-list">
                     {taskSubTab === 'in-progress' && (
                       <>
-                        {/* 1. Owned In-Progress Tasks */}
-                        {inProgressContracts.map(contract => {
-                          const tierDetails = canonicalTiers.find(t => t.name === contract.tier_name || t.price === contract.price) || {
-                            title: `NEXORA ${contract.tier_name.toUpperCase()}:`,
-                            desc: 'Match Telemetry Grid Sync',
-                            img: taskSolarImg,
-                            badge: 'ACTIVE'
-                          };
-                          const dailyReward = Math.round((contract.price * contract.daily_roi) * 100) / 100;
-                          const progress = runningTasks[contract.id];
+                        {/* Empty state check */}
+                        {(dailyTasks.incomplete || []).length === 0 ? (
+                          <div className="bengali-empty-state" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '18px', fontWeight: 'bold' }}>
+                            কোন তথ্য নেই
+                          </div>
+                        ) : (
+                          (dailyTasks.incomplete || []).map(task => {
+                            const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
+                              title: `NEXORA ${task.tier_name.toUpperCase()}:`,
+                              desc: 'Match Telemetry Grid Sync',
+                              img: taskSolarImg,
+                              badge: 'ACTIVE'
+                            };
 
-                          return (
-                            <div key={`contract-task-${contract.id}`} className="task-card-v3">
-                              <div className="task-card-image-wrap">
-                                <img src={tierDetails.img} alt="asset" className="task-card-image" />
-                              </div>
-                              <div className="task-card-info-wrap">
-                                <span className="task-card-badge">{tierDetails.badge}</span>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span className="task-card-title">{tierDetails.title}</span>
-                                  <h4 className="task-card-desc">{tierDetails.desc}</h4>
+                            return (
+                              <div key={`task-item-${task.id}`} className="task-card-v3 rounded-2xl">
+                                <div className="task-card-image-wrap">
+                                  <img src={tierDetails.img} alt="asset" className="task-card-image" />
                                 </div>
-                                <div className="task-card-specs-row">
-                                  <div className="task-card-spec-item">
-                                    <div className="task-card-spec-icon-box reward">
-                                      <DollarSign size={16} />
-                                    </div>
-                                    <div className="task-card-spec-details">
-                                      <span className="task-card-spec-label">Reward</span>
-                                      <span className="task-card-spec-val reward">+{dailyReward > 0 ? `$${dailyReward.toFixed(2)} USD` : 'Active'}</span>
-                                    </div>
-                                  </div>
-                                  <div className="task-card-spec-item">
-                                    <div className="task-card-spec-icon-box deadline">
-                                      <Calendar size={16} />
-                                    </div>
-                                    <div className="task-card-spec-details">
-                                      <span className="task-card-spec-label">Deadline</span>
-                                      <span className="task-card-spec-val deadline">Today, 11:59 PM</span>
-                                    </div>
+                                <div className="task-card-info-wrap">
+                                  <span className="task-card-badge">{tierDetails.badge}</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span className="task-card-title">{tierDetails.title} {tierDetails.desc}</span>
+                                    <h4 className="task-card-desc reward-label-v3">REWARD: +${task.reward.toFixed(2)} USD</h4>
                                   </div>
                                 </div>
+                                <div className="task-card-action-wrap">
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleRunTask(task)}
+                                    className="task-action-btn-neon"
+                                  >
+                                    START TASK
+                                  </button>
+                                </div>
                               </div>
-                              <div className="task-card-action-wrap">
-                                <button 
-                                  type="button"
-                                  onClick={() => handleRunTask(contract.id)}
-                                  disabled={progress !== undefined}
-                                  className={`task-action-btn ${progress !== undefined ? 'running' : 'start'}`}
-                                >
-                                  {progress !== undefined ? (
-                                    <>
-                                      <RefreshCw size={14} className="active-spinning" />
-                                      Syncing {progress}%
-                                    </>
-                                  ) : (
-                                    <>
-                                      Start Task <Zap size={14} fill="currentColor" />
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                            );
+                          })
+                        )}
 
                         {/* 2. Locked Tasks */}
-                        {canonicalTiers.filter(tier => !activeUserContracts.some(c => c.tier_name === tier.name || c.price === tier.price)).map(tier => (
-                          <div key={`locked-task-${tier.id}`} className="task-card-v3 locked">
+                        {canonicalTiers.filter(tier => tier.price > 0 && !contracts.some(c => c.tier_name === tier.name && c.status === 'active')).map(tier => (
+                          <div key={`locked-task-${tier.id}`} className="task-card-v3 locked rounded-2xl">
                             <div className="task-card-image-wrap">
                               <img src={tier.img} alt="asset" className="task-card-image" style={{ filter: 'grayscale(0.6) brightness(0.6)' }} />
                               <div style={{ position: 'absolute', background: 'rgba(0,0,0,0.6)', padding: '8px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)' }}>
@@ -2846,28 +2867,8 @@ export default function App() {
                             <div className="task-card-info-wrap">
                               <span className="task-card-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                <span className="task-card-title" style={{ color: 'var(--text-muted)' }}>{tier.title}</span>
-                                <h4 className="task-card-desc" style={{ color: 'var(--text-muted)' }}>{tier.desc}</h4>
-                              </div>
-                              <div className="task-card-specs-row">
-                                <div className="task-card-spec-item">
-                                  <div className="task-card-spec-icon-box reward" style={{ color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.05)', background: 'transparent' }}>
-                                    <DollarSign size={16} />
-                                  </div>
-                                  <div className="task-card-spec-details">
-                                    <span className="task-card-spec-label">Reward</span>
-                                    <span className="task-card-spec-val" style={{ color: 'var(--text-muted)' }}>+${tier.daily_return.toFixed(2)} USD</span>
-                                  </div>
-                                </div>
-                                <div className="task-card-spec-item">
-                                  <div className="task-card-spec-icon-box deadline" style={{ color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.05)', background: 'transparent' }}>
-                                    <Calendar size={16} />
-                                  </div>
-                                  <div className="task-card-spec-details">
-                                    <span className="task-card-spec-label">Deadline</span>
-                                    <span className="task-card-spec-val" style={{ color: 'var(--text-muted)' }}>Today, 11:59 PM</span>
-                                  </div>
-                                </div>
+                                <span className="task-card-title" style={{ color: 'var(--text-muted)' }}>{tier.title} {tier.desc}</span>
+                                <h4 className="task-card-desc" style={{ color: 'var(--text-muted)' }}>REWARD: +${tier.daily_return.toFixed(2)} USD</h4>
                               </div>
                             </div>
                             <div className="task-card-action-wrap">
@@ -2886,77 +2887,45 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-
-                        {activeUserContracts.length === 0 && (
-                          <div className="glass-card" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                            <Zap size={32} style={{ color: 'var(--accent-gold)', marginBottom: '12px' }} />
-                            <p style={{ fontSize: '14px' }}>No active dynamic grid tasks running on your profile.</p>
-                            <p style={{ fontSize: '12px', marginTop: '6px' }}>Visit the project store to lease energy assets and start collecting daily telemetry rewards.</p>
-                          </div>
-                        )}
                       </>
                     )}
 
                     {taskSubTab === 'completed' && (
                       <>
-                        {completedContracts.map(contract => {
-                          const tierDetails = canonicalTiers.find(t => t.name === contract.tier_name || t.price === contract.price) || {
-                            title: `NEXORA ${contract.tier_name.toUpperCase()}:`,
-                            desc: 'Match Telemetry Grid Sync',
-                            img: taskSolarImg,
-                            badge: 'COMPLETED'
-                          };
-                          const dailyReward = Math.round((contract.price * contract.daily_roi) * 100) / 100;
-
-                          return (
-                            <div key={`completed-task-${contract.id}`} className="task-card-v3 completed">
-                              <div className="task-card-image-wrap">
-                                <img src={tierDetails.img} alt="asset" className="task-card-image" style={{ filter: 'brightness(0.7)' }} />
-                              </div>
-                              <div className="task-card-info-wrap">
-                                <span className="task-card-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>{tierDetails.badge}</span>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  <span className="task-card-title">{tierDetails.title}</span>
-                                  <h4 className="task-card-desc">{tierDetails.desc}</h4>
-                                </div>
-                                <div className="task-card-specs-row">
-                                  <div className="task-card-spec-item">
-                                    <div className="task-card-spec-icon-box reward">
-                                      <DollarSign size={16} />
-                                    </div>
-                                    <div className="task-card-spec-details">
-                                      <span className="task-card-spec-label">Reward Claimed</span>
-                                      <span className="task-card-spec-val reward">+{dailyReward > 0 ? `$${dailyReward.toFixed(2)} USD` : 'Active'}</span>
-                                    </div>
-                                  </div>
-                                  <div className="task-card-spec-item">
-                                    <div className="task-card-spec-icon-box deadline">
-                                      <Calendar size={16} />
-                                    </div>
-                                    <div className="task-card-spec-details">
-                                      <span className="task-card-spec-label">Completed At</span>
-                                      <span className="task-card-spec-val">
-                                        {contract.last_claimed_at ? new Date(contract.last_claimed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="task-card-action-wrap">
-                                <button type="button" disabled className="task-action-btn completed">
-                                  Completed <Check size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-
-                        {completedContracts.length === 0 && (
-                          <div className="glass-card" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                            <Clock size={32} style={{ color: 'var(--accent-blue)', marginBottom: '12px' }} />
-                            <p style={{ fontSize: '14px' }}>No tasks completed yet today.</p>
-                            <p style={{ fontSize: '12px', marginTop: '6px' }}>Go to the 'In progress' tab to run your active node telemetry tasks.</p>
+                        {/* Empty state check */}
+                        {(dailyTasks.completed || []).length === 0 ? (
+                          <div className="bengali-empty-state" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontSize: '18px', fontWeight: 'bold' }}>
+                            কোন তথ্য নেই
                           </div>
+                        ) : (
+                          (dailyTasks.completed || []).map(task => {
+                            const tierDetails = canonicalTiers.find(t => t.name === task.tier_name) || {
+                              title: `NEXORA ${task.tier_name.toUpperCase()}:`,
+                              desc: 'Match Telemetry Grid Sync',
+                              img: taskSolarImg,
+                              badge: 'COMPLETED'
+                            };
+
+                            return (
+                              <div key={`completed-task-${task.id}`} className="task-card-v3 completed rounded-2xl">
+                                <div className="task-card-image-wrap">
+                                  <img src={tierDetails.img} alt="asset" className="task-card-image" style={{ filter: 'brightness(0.7)' }} />
+                                </div>
+                                <div className="task-card-info-wrap">
+                                  <span className="task-card-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>COMPLETED</span>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    <span className="task-card-title">{tierDetails.title} {tierDetails.desc}</span>
+                                    <h4 className="task-card-desc" style={{ color: 'var(--accent-green)' }}>REWARD CLAIMED: +${task.reward.toFixed(2)} USD</h4>
+                                  </div>
+                                </div>
+                                <div className="task-card-action-wrap">
+                                  <button type="button" disabled className="task-action-btn completed">
+                                    Completed <Check size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
                         )}
                       </>
                     )}
@@ -3370,6 +3339,48 @@ export default function App() {
           })}
         </div>
       )}
+
+      {/* 5-SECOND COUNTDOWN TASK OVERLAY MODAL */}
+      {countdownTask && (() => {
+        const canonicalTiers = [
+          { name: 'Free Starter Pack', img: taskSolarImg },
+          { name: 'Eco-Mini Grid', img: taskSolarImg },
+          { name: 'Smart Home Grid', img: taskWindImg },
+          { name: 'Solar Community Hub', img: taskHydroImg },
+          { name: 'Agro-Solar Pump', img: taskSolarImg },
+          { name: 'Wind Farm Asset', img: taskWindImg },
+          { name: 'Industrial Hydro-Plant', img: taskHydroImg },
+          { name: 'Biomass Power Plant', img: taskSolarImg },
+          { name: 'Green Data Center', img: taskWindImg },
+          { name: 'Gold Refinery Reserve', img: taskHydroImg }
+        ];
+        const tierImg = canonicalTiers.find(t => t.name === countdownTask.tier_name)?.img || taskSolarImg;
+
+        return (
+          <div className="countdown-overlay-modal-root" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(15, 23, 42, 0.96)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, backdropFilter: 'blur(10px)' }}>
+            <div className="countdown-modal-box glass-card" style={{ padding: '40px', width: '90%', maxWidth: '420px', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+              <div className="countdown-modal-image-wrap" style={{ width: '120px', height: '120px', borderRadius: '50%', background: '#000', border: '2px solid rgba(0, 230, 118, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', boxShadow: '0 0 30px rgba(0, 230, 118, 0.2)' }}>
+                <img src={tierImg} alt="asset node" className="countdown-modal-image active-pulse" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
+              </div>
+              <h3 style={{ fontSize: '18px', color: '#fff', fontFamily: 'var(--font-display)', marginBottom: '8px', fontWeight: 'bold' }}>
+                Synchronizing Node Telemetry...
+              </h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '12.5px', marginBottom: '25px', lineHeight: '1.5' }}>
+                Connecting to {countdownTask.tier_name} array matrix. Please do not close or reload this window.
+              </p>
+
+              {/* Progress Spinner & Numerical Countdown */}
+              <div className="countdown-progress-spinner-wrap" style={{ position: 'relative', width: '90px', height: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg className="countdown-svg-circle" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
+                  <circle cx="50" cy="50" r="45" className="countdown-circle-bg" style={{ fill: 'transparent', stroke: 'rgba(255,255,255,0.05)', strokeWidth: 8 }}></circle>
+                  <circle cx="50" cy="50" r="45" className="countdown-circle-progress" style={{ fill: 'transparent', stroke: '#06B6D4', strokeWidth: 8, strokeDasharray: 282.6, strokeDashoffset: (282.6 * (5 - countdownSeconds)) / 5, transition: 'stroke-dashoffset 1s linear' }}></circle>
+                </svg>
+                <div className="countdown-number-inner" style={{ position: 'absolute', fontSize: '24px', fontWeight: 'bold', color: '#fff', fontFamily: 'monospace' }}>{countdownSeconds}s</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* OVERLAY MODAL: DIGITAL INVESTMENT AGREEMENT PAGE */}
       {selectedAgreementProject && (
