@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock, 
-  Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy, 
-  Check, X, Award, Handshake, Info, Headphones, Settings, 
+import {
+  Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock,
+  Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy,
+  Check, X, Award, Handshake, Info, Headphones, Settings,
   FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List,
-  Clock, Trash2
+  Clock, Trash2, Leaf, House, Sun, Droplet, Wind, WavesHorizontal, Flame,
+  Server, Gem, Globe, ListFilter, DollarSign, TrendingUp, Calendar
 } from 'lucide-react';
 
 import energyBanner from './assets/energy_banner.png';
 import refineryBanner from './assets/refinery_banner.png';
 import metalsBanner from './assets/metals_banner.png';
+import taskSolarImg from './assets/task_solar.png';
+import taskWindImg from './assets/task_wind.png';
+import taskHydroImg from './assets/task_hydro.png';
 
 const API_BASE = '/api';
 
@@ -21,6 +25,20 @@ const bottomNavItems = [
   { id: 'team', label: 'Team', icon: Users },
   { id: 'me', label: 'Me', icon: Settings }
 ];
+
+// Category icon per project tier, keyed by LEASE_PROJECTS id
+const PROJECT_CATEGORY_ICONS = {
+  eco_mini: Leaf,
+  smart_home: House,
+  solar_hub: Sun,
+  agro_pump: Droplet,
+  wind_farm: Wind,
+  hydro_plant: WavesHorizontal,
+  biomass_plant: Flame,
+  data_center: Server,
+  gold_reserve: Gem,
+  energy_matrix: Globe
+};
 
 export default function App() {
   // Global States
@@ -90,11 +108,30 @@ export default function App() {
   const [isMining, setIsMining] = useState(false);
   const [miningPercent, setMiningPercent] = useState(0);
 
+  // User Tasks tab states
+  const [taskSubTab, setTaskSubTab] = useState('in-progress');
+  const [runningTasks, setRunningTasks] = useState({});
+
   // Live Lists
   const [contracts, setContracts] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [vaultLocks, setVaultLocks] = useState([]);
   const [telegramFeed, setTelegramFeed] = useState([]);
+  const [investmentPackages, setInvestmentPackages] = useState([]);
+  const [adminPackages, setAdminPackages] = useState([]);
+  const [adminInvestments, setAdminInvestments] = useState([]);
+  const [packageForm, setPackageForm] = useState({
+    id: '',
+    name: '',
+    price: '',
+    daily_return: '',
+    total_return: '',
+    price_bdt: '',
+    daily_return_bdt: '',
+    lock_days: '180',
+    graphic_type: '',
+    description: ''
+  });
 
   // Timer Tick state for rolling tickers
   const [secondsElapsed, setSecondsElapsed] = useState(0);
@@ -156,6 +193,8 @@ export default function App() {
       fetchAdminTaskSubmissions();
       fetchTaskConfigs();
       fetchLabourLogs();
+      fetchAdminPackages();
+      fetchAdminInvestments();
     } else {
       setIsAdmin(false);
       setAdminData(null);
@@ -164,6 +203,10 @@ export default function App() {
       setLabourLogs([]);
     }
   }, [adminToken]);
+
+  useEffect(() => {
+    fetchInvestmentPackages();
+  }, []);
 
   useEffect(() => {
     setConfigsState(taskConfigs);
@@ -191,6 +234,46 @@ export default function App() {
   const showStatus = (text, type = 'success') => {
     setStatusMsg({ text, type });
     setTimeout(() => setStatusMsg({ text: '', type: '' }), 5000);
+  };
+
+  const fetchInvestmentPackages = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/invest/packages`);
+      const data = await res.json();
+      if (res.ok) {
+        setInvestmentPackages(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAdminPackages = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/packages`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAdminPackages(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAdminInvestments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/investments`, {
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAdminInvestments(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Profile refresh
@@ -390,6 +473,86 @@ export default function App() {
     setIsAdmin(false);
     setAdminData(null);
     setAdminTaskSubmissions([]);
+  };
+
+  const handleSavePackage = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/admin/packages/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({
+          ...packageForm,
+          price: Number(packageForm.price || 0),
+          daily_return: Number(packageForm.daily_return || 0),
+          total_return: Number(packageForm.total_return || 0),
+          price_bdt: Number(packageForm.price_bdt || 0),
+          daily_return_bdt: Number(packageForm.daily_return_bdt || 0),
+          lock_days: Number(packageForm.lock_days || 180)
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showStatus(data.message);
+      setPackageForm({ id: '', name: '', price: '', daily_return: '', total_return: '', price_bdt: '', daily_return_bdt: '', lock_days: '180', graphic_type: '', description: '' });
+      fetchAdminPackages();
+      fetchInvestmentPackages();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleEditPackage = (pkg) => {
+    setPackageForm({
+      id: pkg.id,
+      name: pkg.name,
+      price: pkg.price,
+      daily_return: pkg.daily_return,
+      total_return: pkg.total_return,
+      price_bdt: pkg.price_bdt,
+      daily_return_bdt: pkg.daily_return_bdt,
+      lock_days: pkg.lock_days,
+      graphic_type: pkg.graphic_type,
+      description: pkg.description
+    });
+  };
+
+  const handleDeletePackage = async (id) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/packages/delete/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${adminToken}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showStatus(data.message);
+      fetchAdminPackages();
+      fetchInvestmentPackages();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
+  };
+
+  const handleTerminateContract = async (contractId) => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/investments/terminate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ contractId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      showStatus(data.message);
+      fetchAdminInvestments();
+    } catch (err) {
+      showStatus(err.message, 'error');
+    }
   };
 
   // Client Operations
@@ -643,6 +806,49 @@ export default function App() {
     } catch (err) {
       showStatus(err.message, 'error');
     }
+  };
+
+  // Perform Daily Contract Grid Task Simulation
+  const handleRunTask = (contractId) => {
+    if (runningTasks[contractId] !== undefined) return;
+
+    setRunningTasks(prev => ({ ...prev, [contractId]: 0 }));
+
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      setRunningTasks(prev => ({ ...prev, [contractId]: progress }));
+      if (progress >= 100) {
+        clearInterval(interval);
+        setTimeout(async () => {
+          try {
+            const res = await fetch(`${API_BASE}/invest/claim`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ contractId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            showStatus(`Grid synchronization complete! Yield successfully credited.`);
+            fetchUserProfile();
+            fetchUserContracts();
+            fetchUserTxHistory();
+          } catch (err) {
+            showStatus(err.message, 'error');
+          } finally {
+            setRunningTasks(prev => {
+              const updated = { ...prev };
+              delete updated[contractId];
+              return updated;
+            });
+          }
+        }, 300);
+      }
+    }, 250);
   };
 
   // Deposit Submission
@@ -992,117 +1198,60 @@ export default function App() {
   // Bangladeshi Flat returns projects definitions
   // 10-Tier USD Nexora Investment Shop definitions
   const LEASE_PROJECTS = [
-    {
-      id: 'eco_mini',
-      name: "Nexora Eco-Mini Grid",
-      description: "Fractional clean power nodes generating base grid energy outputs.",
-      price: 10,
-      dailyProfit: 0.35,
-      duration: 180,
-      totalProfit: 63,
-      bgGradient: "linear-gradient(135deg, #00e676 0%, #00b0ff 100%)",
-      category: "ECO MINI POWER"
-    },
-    {
-      id: 'smart_home',
-      name: "Nexora Smart Home Grid",
-      description: "Localized solar setups for eco-smart home residential integrations.",
-      price: 30,
-      dailyProfit: 1.10,
-      duration: 180,
-      totalProfit: 198,
-      bgGradient: "linear-gradient(135deg, #2979ff 0%, #a012f3 100%)",
-      category: "SMART SOLAR HOME"
-    },
-    {
-      id: 'solar_hub',
-      name: "Nexora Solar Community Hub",
-      description: "Community grid nodes yielding utility-scale solar outputs.",
-      price: 70,
-      dailyProfit: 2.70,
-      duration: 180,
-      totalProfit: 486,
-      bgGradient: "linear-gradient(135deg, #ff9100 0%, #ff3d00 100%)",
-      category: "COMMUNITY SOLAR"
-    },
-    {
-      id: 'agro_pump',
-      name: "Nexora Agro-Solar Pump",
-      description: "Agro-power pumping array providing agricultural water allocations.",
-      price: 100,
-      dailyProfit: 4.00,
-      duration: 180,
-      totalProfit: 720,
-      bgGradient: "linear-gradient(135deg, #00e5ff 0%, #2979ff 100%)",
-      category: "AGRO WATER NODE"
-    },
-    {
-      id: 'wind_farm',
-      name: "Nexora Wind Farm Asset",
-      description: "Coastal wind turbines feeding high efficiency offshore allocations.",
-      price: 300,
-      dailyProfit: 13.00,
-      duration: 180,
-      totalProfit: 2340,
-      bgGradient: "linear-gradient(135deg, #ffd700 0%, #ff6d00 100%)",
-      category: "WIND UTILITY"
-    },
-    {
-      id: 'hydro_plant',
-      name: "Nexora Industrial Hydro-Plant",
-      description: "Utility hydro-electric generator plants driving baseline grid syncs.",
-      price: 700,
-      dailyProfit: 32.00,
-      duration: 180,
-      totalProfit: 5760,
-      bgGradient: "linear-gradient(135deg, #00e676 0%, #ff9100 100%)",
-      category: "HYDRO BASELINE"
-    },
-    {
-      id: 'biomass_plant',
-      name: "Nexora Biomass Power Plant",
-      description: "Agricultural waste combustion nodes providing 24/7 utility feeds.",
-      price: 1000,
-      dailyProfit: 48.00,
-      duration: 180,
-      totalProfit: 8640,
-      bgGradient: "linear-gradient(135deg, #2979ff 0%, #ff3d00 100%)",
-      category: "BIOMASS NODE"
-    },
-    {
-      id: 'data_center',
-      name: "Nexora Green Data Center",
-      description: "Solar-powered cluster grids routing cloud computing operations.",
-      price: 5000,
-      dailyProfit: 260.00,
-      duration: 180,
-      totalProfit: 46800,
-      bgGradient: "linear-gradient(135deg, #a012f3 0%, #ff9100 100%)",
-      category: "CLOUD DATA CENTER"
-    },
-    {
-      id: 'gold_reserve',
-      name: "Nexora Gold Refinery Reserve",
-      description: "Rent physical commodities refining pipelines processing bullion.",
-      price: 10000,
-      dailyProfit: 550.00,
-      duration: 180,
-      totalProfit: 99000,
-      bgGradient: "linear-gradient(135deg, #ffd700 0%, #00e676 100%)",
-      category: "CUSTODIAL GOLD"
-    },
-    {
-      id: 'energy_matrix',
-      name: "Nexora Sovereign Energy Matrix",
-      description: "State-level utility clean energy allocations synched globally.",
-      price: 50000,
-      dailyProfit: 3000.00,
-      duration: 180,
-      totalProfit: 540000,
-      bgGradient: "linear-gradient(135deg, #ffd700 0%, #a012f3 100%)",
-      category: "SOVEREIGN MATRIX"
-    }
+    { id: 'free_starter', name: 'Free Starter Pack', description: 'Unlocked by default on new registration. Earn through active free tasks.', price: 0, dailyProfit: 0, duration: 180, totalProfit: 36, priceBdt: 0, dailyProfitBdt: 0, bgGradient: 'linear-gradient(135deg, #0f766e 0%, #06b6d4 100%)', category: 'FREE STARTER', graphicType: 'book' },
+    { id: 'eco_mini', name: 'Eco-Mini Grid', description: 'Single residential solar cell module generating passive base-grid yields.', price: 10, dailyProfit: 0.25, duration: 180, totalProfit: 135, priceBdt: 1200, dailyProfitBdt: 30, bgGradient: 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)', category: 'ECO MINI POWER', graphicType: 'solar' },
+    { id: 'smart_home', name: 'Smart Home Grid', description: 'Isometric smart house layout with wireless blue pulse ripple energy grid.', price: 30, dailyProfit: 0.75, duration: 180, totalProfit: 270, priceBdt: 3600, dailyProfitBdt: 90, bgGradient: 'linear-gradient(135deg, #2563eb 0%, #8b5cf6 100%)', category: 'SMART SOLAR HOME', graphicType: 'house' },
+    { id: 'solar_hub', name: 'Solar Community Hub', description: 'Public interconnected micro-grid arrays powering community energy hubs.', price: 70, dailyProfit: 1.70, duration: 180, totalProfit: 630, priceBdt: 8400, dailyProfitBdt: 204, bgGradient: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)', category: 'COMMUNITY SOLAR', graphicType: 'community' },
+    { id: 'agro_pump', name: 'Agro-Solar Pump', description: 'Automated water pump integrated with modular solar wings for agriculture.', price: 100, dailyProfit: 2.50, duration: 180, totalProfit: 900, priceBdt: 12000, dailyProfitBdt: 300, bgGradient: 'linear-gradient(135deg, #22d3ee 0%, #2563eb 100%)', category: 'AGRO WATER NODE', graphicType: 'pump' },
+    { id: 'wind_farm', name: 'Wind Farm Asset', description: 'Modern high-poly rotating wind turbines generating clean offshore yields.', price: 300, dailyProfit: 7.50, duration: 180, totalProfit: 2700, priceBdt: 36000, dailyProfitBdt: 900, bgGradient: 'linear-gradient(135deg, #facc15 0%, #f97316 100%)', category: 'WIND UTILITY', graphicType: 'wind' },
+    { id: 'hydro_plant', name: 'Industrial Hydro-Plant', description: 'Water dam mechanical terminal pulsating with neon blue energy vectors.', price: 700, dailyProfit: 17.50, duration: 180, totalProfit: 6300, priceBdt: 84000, dailyProfitBdt: 2100, bgGradient: 'linear-gradient(135deg, #2dd4bf 0%, #f59e0b 100%)', category: 'HYDRO BASELINE', graphicType: 'hydro' },
+    { id: 'biomass_plant', name: 'Biomass Power Plant', description: 'Bio-refinery silo recycling radiant fluid particles to generate power.', price: 1000, dailyProfit: 25.00, duration: 180, totalProfit: 9900, priceBdt: 120000, dailyProfitBdt: 3000, bgGradient: 'linear-gradient(135deg, #38bdf8 0%, #ef4444 100%)', category: 'BIOMASS NODE', graphicType: 'biomass' },
+    { id: 'data_center', name: 'Green Data Center', description: 'High-tech mainframe server chassis layered with bright cooling tubes.', price: 5000, dailyProfit: 125.00, duration: 180, totalProfit: 48600, priceBdt: 600000, dailyProfitBdt: 15000, bgGradient: 'linear-gradient(135deg, #8b5cf6 0%, #f59e0b 100%)', category: 'CLOUD DATA CENTER', graphicType: 'server' },
+    { id: 'gold_reserve', name: 'Gold Refinery Reserve', description: 'Highly glossed solid bullion gold bars arranged on a circuit refinery pattern.', price: 10000, dailyProfit: 250.00, duration: 180, totalProfit: 102600, priceBdt: 1200000, dailyProfitBdt: 30000, bgGradient: 'linear-gradient(135deg, #fbbf24 0%, #10b981 100%)', category: 'CUSTODIAL GOLD', graphicType: 'gold' }
   ];
+
+  const projectGradientMap = Object.fromEntries(LEASE_PROJECTS.map(project => [project.id, project.bgGradient]));
+  const projectCatalog = investmentPackages.length > 0 ? investmentPackages.map(pkg => ({
+    id: pkg.id,
+    name: pkg.name,
+    description: pkg.description || 'Sustainable infrastructure opportunity',
+    price: Number(pkg.price || 0),
+    dailyProfit: Number(pkg.daily_return || 0),
+    duration: Number(pkg.lock_days || 180),
+    totalProfit: Number(pkg.total_return || 0),
+    priceBdt: Number(pkg.price_bdt || 0),
+    dailyProfitBdt: Number(pkg.daily_return_bdt || 0),
+    bgGradient: projectGradientMap[pkg.id] || 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+    category: (pkg.name || 'INFRASTRUCTURE').toUpperCase(),
+    graphicType: pkg.graphic_type || 'globe'
+  })) : LEASE_PROJECTS;
+
+  const getGraphicIcon = (graphicType = '') => {
+    const iconMap = {
+      book: Leaf,
+      solar: Sun,
+      house: House,
+      community: Sun,
+      pump: Droplet,
+      wind: Wind,
+      hydro: WavesHorizontal,
+      biomass: Flame,
+      server: Server,
+      gold: Gem,
+      globe: Globe
+    };
+    return iconMap[graphicType] || Globe;
+  };
+
+  const renderProjectVisual = (project) => {
+    const Icon = getGraphicIcon(project.graphicType || project.graphic_type || 'globe');
+    return (
+      <div className="project-hero-visual" style={{ background: project.bgGradient }}>
+        <div className="project-hero-glow"></div>
+        <Icon size={44} strokeWidth={1.3} className="project-hero-icon" />
+      </div>
+    );
+  };
 
   // Helper renderers for dynamic seals & QR
   const renderCorporateStamp = () => (
@@ -1881,14 +2030,134 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* PLACEHOLDERS FOR NEW SIDEBAR TABS */}
-                  {['subscription-management', 'task-overview', 'task-analytics', 'task-payouts', 'audit-logs', 'support-center'].includes(adminActiveTab) && (
-                    <div className="admin-panel-card" style={{ padding: '24px', textAlign: 'center' }}>
-                      <Cpu size={32} style={{ color: '#4b5563', marginBottom: '12px' }} />
-                      <h4 style={{ color: '#fff', fontSize: '14px', marginBottom: '6px' }}>{adminActiveTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</h4>
-                      <p style={{ color: '#9ca3af', fontSize: '12px' }}>Operational telemetry stream active. Diagnostic registers healthy.</p>
+                  {/* ADMIN: SUBSCRIPTION MANAGEMENT */}
+                  {adminActiveTab === 'subscription-management' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">PRODUCT CONFIGURATOR MANAGER (CRUD) - Investment Tiers</span>
+                      </div>
+                      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <form onSubmit={handleSavePackage} style={{ display: 'flex', flexDirection: 'column', gap: '12px', background: 'rgba(0,0,0,0.3)', padding: '16px', borderRadius: '8px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                            <input type="text" placeholder="Package ID" value={packageForm.id} onChange={e => setPackageForm({...packageForm, id: e.target.value})} className="admin-input-dark" disabled={packageForm.id !== ''} required />
+                            <input type="text" placeholder="Package Name" value={packageForm.name} onChange={e => setPackageForm({...packageForm, name: e.target.value})} className="admin-input-dark" required />
+                            <input type="number" placeholder="Price USD" value={packageForm.price} onChange={e => setPackageForm({...packageForm, price: parseFloat(e.target.value) || 0})} className="admin-input-dark" required />
+                            <input type="number" placeholder="Daily Return USD" value={packageForm.daily_return} onChange={e => setPackageForm({...packageForm, daily_return: parseFloat(e.target.value) || 0})} className="admin-input-dark" required />
+                            <input type="number" placeholder="Total Return USD" value={packageForm.total_return} onChange={e => setPackageForm({...packageForm, total_return: parseFloat(e.target.value) || 0})} className="admin-input-dark" required />
+                            <input type="number" placeholder="Lock Days" value={packageForm.lock_days} onChange={e => setPackageForm({...packageForm, lock_days: parseInt(e.target.value) || 180})} className="admin-input-dark" required />
+                            <select value={packageForm.graphic_type} onChange={e => setPackageForm({...packageForm, graphic_type: e.target.value})} className="admin-input-dark" required>
+                              <option value="">Select Graphic Type</option>
+                              <option value="solar">Solar</option>
+                              <option value="wind">Wind</option>
+                              <option value="hydro">Hydro</option>
+                              <option value="biomass">Biomass</option>
+                              <option value="house">House</option>
+                              <option value="pump">Pump</option>
+                              <option value="server">Server</option>
+                              <option value="gold">Gold</option>
+                              <option value="book">Book</option>
+                              <option value="globe">Globe</option>
+                            </select>
+                            <input type="text" placeholder="Description" value={packageForm.description} onChange={e => setPackageForm({...packageForm, description: e.target.value})} className="admin-input-dark" />
+                          </div>
+                          <button type="submit" className="admin-btn admin-btn-success">Save Package</button>
+                        </form>
+                        <div className="admin-table-container">
+                          <table className="admin-table">
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Price USD</th>
+                                <th>Daily Return</th>
+                                <th>Total Return</th>
+                                <th>Lock Days</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {adminPackages.length === 0 ? (
+                                <tr>
+                                  <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>No packages configured.</td>
+                                </tr>
+                              ) : (
+                                adminPackages.map(pkg => (
+                                  <tr key={pkg.id}>
+                                    <td>{pkg.id}</td>
+                                    <td><strong>{pkg.name}</strong></td>
+                                    <td>${pkg.price}</td>
+                                    <td>${pkg.daily_return}</td>
+                                    <td>${pkg.total_return}</td>
+                                    <td>{pkg.lock_days} days</td>
+                                    <td>
+                                      <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button onClick={() => handleEditPackage(pkg)} className="admin-btn admin-btn-primary" style={{ fontSize: '11px' }}>Edit</button>
+                                        {!['free_starter', 'eco_mini', 'smart_home', 'solar_hub', 'agro_pump', 'wind_farm', 'hydro_plant', 'biomass_plant', 'data_center', 'gold_reserve'].includes(pkg.id) && (
+                                          <button onClick={() => handleDeletePackage(pkg.id)} className="admin-btn admin-btn-danger" style={{ fontSize: '11px' }}>Delete</button>
+                                        )}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  {/* ADMIN: TASK OVERVIEW */}
+                  {adminActiveTab === 'task-overview' && (
+                    <div className="admin-panel-card">
+                      <div className="admin-panel-header">
+                        <span className="admin-panel-title">ACTIVE INVESTMENT LEDGER - Contract Tracking</span>
+                      </div>
+                      <div className="admin-table-container">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>User Phone ID</th>
+                              <th>Selected Tier</th>
+                              <th>Purchase Date</th>
+                              <th>Maturity Date</th>
+                              <th>Contract Status</th>
+                              <th>Price USD</th>
+                              <th>Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {adminInvestments.length === 0 ? (
+                              <tr>
+                                <td colSpan="7" style={{ padding: '20px', textAlign: 'center', color: '#9ca3af' }}>No active investment contracts found.</td>
+                              </tr>
+                            ) : (
+                              adminInvestments.map(inv => (
+                                <tr key={inv.id}>
+                                  <td><strong>{inv.phone}</strong></td>
+                                  <td>{inv.tier_name}</td>
+                                  <td>{new Date(inv.created_at).toLocaleDateString()}</td>
+                                  <td>{inv.maturity_date}</td>
+                                  <td>
+                                    <span className={`admin-badge ${inv.status === 'active' ? 'admin-badge-success' : 'admin-badge-warning'}`}>
+                                      {inv.status}
+                                    </span>
+                                  </td>
+                                  <td>${inv.price}</td>
+                                  <td>
+                                    <button onClick={() => handleTerminateContract(inv.id)} className="admin-btn admin-btn-danger" style={{ fontSize: '11px' }}>
+                                      Terminate Contract
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
 
                 </div>
               ) : (
@@ -2342,185 +2611,482 @@ export default function App() {
             {/* TAB 2: PROJECTS (Leasing Shop) */}
             {activeTab === 'invest' && (
               <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                <div className="projects-tab-header">
-                  <h3>Infrastructure Lease Shop</h3>
-                  <p style={{ color: 'var(--text-muted)' }}>Rent fractional clean power nodes or metal refinery reactors. All contracts have a fixed 180-day lock-in period with daily ROI harvest clearance. All returns are flat USD values.</p>
+                <div className="projects-tab-header-flex">
+                  <div className="projects-tab-header">
+                    <h3>Projects</h3>
+                    <p>Invest in sustainable projects. Earn stable daily returns.</p>
+                  </div>
+                  <button className="filter-icon-btn" type="button" aria-label="Filter projects">
+                    <ListFilter size={16} />
+                  </button>
                 </div>
 
                 {/* Grid list of projects */}
                 <div className="projects-grid">
-                  {LEASE_PROJECTS.map(proj => (
-                    <div key={proj.id} className="glass-card project-card-wrap" style={{ borderTop: `4px solid ${proj.id === 'gold_reserve' || proj.id === 'energy_matrix' ? 'var(--accent-gold)' : 'var(--accent-green)'}` }}>
-                      <div className="card-top-header">
-                        <span className="category-badge">{proj.category}</span>
-                        <h4>{proj.name}</h4>
-                      </div>
-                      <p className="project-desc">{proj.description}</p>
-                      
-                      <div className="project-financial-ledger">
-                        <div className="ledger-item">
-                          <span>Purchase Lease Cost:</span>
-                          <strong>${proj.price.toLocaleString()}</strong>
+                  {projectCatalog.map((proj, idx) => {
+                    const CategoryIcon = PROJECT_CATEGORY_ICONS[proj.id] || Zap;
+                    return (
+                      <div key={proj.id} className="glass-card project-card-v2">
+                        <div className="project-card-top">
+                          <span className="tier-badge">TIER {idx + 1}</span>
+                          <span className="category-icon-badge" style={{ background: proj.bgGradient }}>
+                            <CategoryIcon size={16} strokeWidth={2} />
+                          </span>
                         </div>
-                        <div className="ledger-item">
-                          <span>Daily Profit return:</span>
-                          <strong style={{ color: 'var(--accent-green)' }}>+${proj.dailyProfit.toLocaleString()}/day</strong>
-                        </div>
-                        <div className="ledger-item">
-                          <span>Lock-in Duration:</span>
-                          <span>180 Days</span>
-                        </div>
-                        <div className="ledger-item" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '8px' }}>
-                          <span>Total estimated return:</span>
-                          <strong style={{ color: 'var(--accent-gold)' }}>${proj.totalProfit.toLocaleString()}</strong>
-                        </div>
-                      </div>
 
-                      <button 
-                        onClick={() => setSelectedAgreementProject(proj)} 
-                        className="btn-primary" 
-                        style={{ width: '100%', justifyContent: 'center', marginTop: '10px' }}
-                      >
-                        Sign Agreement & Lease
-                      </button>
-                    </div>
-                  ))}
+                        {renderProjectVisual(proj)}
+
+                        <div className="project-card-body">
+                          <span className="project-category-label">{proj.category}</span>
+                          <h4 className="project-title">{proj.name}</h4>
+
+                          <div className="project-return-block">
+                            <span>Total Return</span>
+                            <strong>${proj.totalProfit.toLocaleString()} USD</strong>
+                          </div>
+
+                          <div className="project-stats-row">
+                            <div className="project-stat-box">
+                              <DollarSign size={14} />
+                              <div>
+                                <span>Project Price</span>
+                                <strong>${proj.price.toLocaleString()} USD</strong>
+                              </div>
+                            </div>
+                            <div className="project-stat-box">
+                              <TrendingUp size={14} />
+                              <div>
+                                <span>Daily Profit</span>
+                                <strong className="stat-green">${proj.dailyProfit.toLocaleString()} USD</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="project-card-footer">
+                            <span className="project-cycle-info"><Clock size={12} /> Cycle: {proj.duration} Days</span>
+                            <button
+                              onClick={() => setSelectedAgreementProject(proj)}
+                              className="invest-now-btn"
+                              type="button"
+                            >
+                              Invest Now <ArrowUpRight size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* TAB 3: TASKS (Daily tasks, screenshot upload and attendance) */}
-            {activeTab === 'tasks' && (
-              <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-                
-                <div className="projects-tab-header">
-                  <h3>Lessor Task Rewards Terminal</h3>
-                  <p style={{ color: 'var(--text-muted)' }}>Perform grid synchronization and social promotion actions to earn additional spendable credits directly into your wallet.</p>
-                </div>
+            {activeTab === 'tasks' && (() => {
+              const activeUserContracts = contracts.filter(c => c.status === 'active');
+              
+              const isClaimedToday = (contract) => {
+                if (!contract.last_claimed_at) return false;
+                const lastClaim = new Date(contract.last_claimed_at);
+                const now = new Date();
+                return lastClaim.getUTCDate() === now.getUTCDate() &&
+                       lastClaim.getUTCMonth() === now.getUTCMonth() &&
+                       lastClaim.getUTCFullYear() === now.getUTCFullYear();
+              };
 
-                <div className="home-dashboard-grid">
+              const inProgressContracts = activeUserContracts.filter(c => !isClaimedToday(c));
+              const completedContracts = activeUserContracts.filter(c => isClaimedToday(c));
+
+              const canonicalTiers = [
+                { id: 'free_starter', name: 'Free Starter Pack', price: 0, daily_return: 0.00, title: 'NEXORA FREE STARTER:', desc: 'Match Starter Telemetry Order', img: taskSolarImg, badge: 'FREE' },
+                { id: 'eco_mini', name: 'Eco-Mini Grid', price: 10, daily_return: 0.25, title: 'NEXORA TIER 1:', desc: 'Match Eco-Grid Order', img: taskSolarImg, badge: 'TIER 1' },
+                { id: 'smart_home', name: 'Smart Home Grid', price: 30, daily_return: 0.75, title: 'NEXORA TIER 2:', desc: 'Match Wind-Force Order', img: taskWindImg, badge: 'TIER 2' },
+                { id: 'solar_hub', name: 'Solar Community Hub', price: 70, daily_return: 1.70, title: 'NEXORA TIER 3:', desc: 'Match Hydro-Flow Order', img: taskHydroImg, badge: 'TIER 3' },
+                { id: 'agro_pump', name: 'Agro-Solar Pump', price: 100, daily_return: 2.50, title: 'NEXORA TIER 4:', desc: 'Match Agro-Pump Telemetry', img: taskSolarImg, badge: 'TIER 4' },
+                { id: 'wind_farm', name: 'Wind Farm Asset', price: 300, daily_return: 7.50, title: 'NEXORA TIER 5:', desc: 'Match Wind-Farm Sync', img: taskWindImg, badge: 'TIER 5' },
+                { id: 'hydro_plant', name: 'Industrial Hydro-Plant', price: 700, daily_return: 17.50, title: 'NEXORA TIER 6:', desc: 'Match Hydro-Plant Telemetry', img: taskHydroImg, badge: 'TIER 6' },
+                { id: 'biomass_plant', name: 'Biomass Power Plant', price: 1000, daily_return: 25.00, title: 'NEXORA TIER 7:', desc: 'Match Biomass Calibration', img: taskSolarImg, badge: 'TIER 7' },
+                { id: 'data_center', name: 'Green Data Center', price: 5000, daily_return: 125.00, title: 'NEXORA TIER 8:', desc: 'Match Data-Center Coolant Sync', img: taskWindImg, badge: 'TIER 8' },
+                { id: 'gold_reserve', name: 'Gold Refinery Reserve', price: 10000, daily_return: 250.00, title: 'NEXORA TIER 9:', desc: 'Match Gold Refinery Verification', img: taskHydroImg, badge: 'TIER 9' }
+              ];
+
+              return (
+                <div className="tab-pane-layout" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                   
-                  {/* Left Column: Daily Attendance & Recruitment Milestone */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    
-                    {/* Attendance checkin */}
-                    <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <h3 style={{ fontSize: '15px' }}>Daily Attendance Telemetry</h3>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Synchronize your node telemetry once daily to claim attendance allowance.</p>
-                        </div>
-                        <div style={{ background: 'var(--accent-green-glow)', padding: '8px', borderRadius: '50%' }}>
-                          <CheckSquare size={20} style={{ color: 'var(--accent-green)' }} />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
-                        <span>Daily Allowance:</span>
-                        <strong style={{ color: 'var(--accent-green)' }}>+$0.20 USD</strong>
-                      </div>
-
-                      <button 
-                        onClick={claimAttendance}
-                        className="btn-primary" 
-                        style={{ justifyContent: 'center', marginTop: '5px' }}
-                      >
-                        Complete Attendance Telemetry
-                      </button>
-                    </div>
-
-                    {/* Recruitment Milestone Tier */}
-                    <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <h3 style={{ fontSize: '15px' }}>Recruitment Milestone Challenge</h3>
-                          <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Expand your network: get 3 direct Level 1 downlines to active Tier 1 ($10+) lease project.</p>
-                        </div>
-                        <div style={{ background: 'var(--accent-gold-glow)', padding: '8px', borderRadius: '50%' }}>
-                          <Users size={20} style={{ color: 'var(--accent-gold)' }} />
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
-                        <span>Milestone Reward:</span>
-                        <strong style={{ color: 'var(--accent-gold)' }}>+$10.00 USD</strong>
-                      </div>
-
-                      {/* Recruitment progress */}
-                      {user && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
-                            <span>Active Downline Leases:</span>
-                            <strong>{user.stats.activeDownlinesCount} / 3 Nodes</strong>
-                          </div>
-                          <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.min(100, (user.stats.activeDownlinesCount / 3) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-gold) 0%, #ff8f00 100%)' }}></div>
-                          </div>
-                        </div>
-                      )}
-
-                      <button 
-                        onClick={claimRecruitmentMilestone}
-                        disabled={!user || user.stats.activeDownlinesCount < 3 || user.milestone_recruitment_claimed === 1}
-                        className="btn-primary" 
-                        style={{
-                          justifyContent: 'center',
-                          background: user && user.milestone_recruitment_claimed === 1 ? 'var(--bg-tertiary)' : (user && user.stats.activeDownlinesCount >= 3) ? 'linear-gradient(135deg, var(--accent-gold) 0%, #ff8f00 100%)' : 'var(--bg-tertiary)',
-                          color: user && user.milestone_recruitment_claimed === 1 ? 'var(--text-muted)' : (user && user.stats.activeDownlinesCount >= 3) ? '#000' : 'var(--text-muted)',
-                          cursor: (user && user.stats.activeDownlinesCount >= 3 && user.milestone_recruitment_claimed !== 1) ? 'pointer' : 'not-allowed',
-                          border: '1px solid var(--border-color)'
-                        }}
-                      >
-                        {user && user.milestone_recruitment_claimed === 1 ? "Milestone Claimed" : "Claim Recruitment Reward"}
-                      </button>
-                    </div>
-
+                  <div className="projects-tab-header">
+                    <h3>Lessor Task Rewards Terminal</h3>
+                    <p style={{ color: 'var(--text-muted)' }}>Perform grid synchronization and social promotion actions to earn additional spendable credits directly into your wallet.</p>
                   </div>
 
-                  {/* Right Column: Social sharing Screenshot Uploader */}
-                  <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h3 style={{ fontSize: '15px' }}>Social Amplification sharing</h3>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Share Nexora official banners on Facebook/TikTok. Upload proof screenshot here.</p>
+                  {/* PREMIUM STATS ROW */}
+                  <div className="task-stats-row">
+                    <div className="glass-card task-stat-card">
+                      <div className="task-stat-icon-wrapper clipboard">
+                        <CheckSquare size={24} />
                       </div>
-                      <div style={{ background: 'var(--accent-blue-glow)', padding: '8px', borderRadius: '50%' }}>
-                        <Upload size={20} style={{ color: 'var(--accent-blue)' }} />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
-                      <span>Promotion Reward:</span>
-                      <strong style={{ color: 'var(--accent-green)' }}>+$1.00 USD</strong>
-                    </div>
-
-                    <form onSubmit={submitSocialTask} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Choose Screenshot Proof Image</label>
-                        <input type="file" accept="image/*" onChange={handleFileChange} className="glass-input" style={{ fontSize: '12px' }} />
-                      </div>
-
-                      {/* Image preview */}
-                      {proofBase64 && (
-                        <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', maxHeight: '160px' }}>
-                          <img src={proofBase64} alt="proof preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div className="task-stat-info">
+                        <span className="task-stat-title">All tasks for today:</span>
+                        <div className="task-stat-value-wrap">
+                          <span className="task-stat-value">{activeUserContracts.length}</span>
+                          <span className="task-stat-unit">Tasks</span>
                         </div>
-                      )}
+                      </div>
+                    </div>
 
-                      <button type="submit" className="btn-primary" style={{ justifyContent: 'center', width: '100%' }}>
-                        Submit Screenshot Proof
-                      </button>
-                    </form>
+                    <div className="glass-card task-stat-card">
+                      <div className="task-stat-icon-wrapper clock">
+                        <Clock size={24} />
+                      </div>
+                      <div className="task-stat-info">
+                        <span className="task-stat-title">Today's remaining tasks:</span>
+                        <div className="task-stat-value-wrap">
+                          <span className="task-stat-value">{inProgressContracts.length}</span>
+                          <span className="task-stat-unit">Tasks</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
 
-                    <div style={{ marginTop: '10px', fontSize: '11.5px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px', color: 'var(--text-muted)' }}>
-                      <span>Status: Submit post screenshot to claim reward after review.</span>
+                  {/* TAB SWITCHER */}
+                  <div className="task-tab-switcher">
+                    <button 
+                      type="button"
+                      onClick={() => setTaskSubTab('in-progress')}
+                      className={`task-tab-btn ${taskSubTab === 'in-progress' ? 'active' : ''}`}
+                    >
+                      In progress
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => setTaskSubTab('completed')}
+                      className={`task-tab-btn ${taskSubTab === 'completed' ? 'active' : ''}`}
+                    >
+                      Completed
+                    </button>
+                  </div>
+
+                  {/* TASKS LIST */}
+                  <div className="task-cards-list">
+                    {taskSubTab === 'in-progress' && (
+                      <>
+                        {/* 1. Owned In-Progress Tasks */}
+                        {inProgressContracts.map(contract => {
+                          const tierDetails = canonicalTiers.find(t => t.name === contract.tier_name || t.price === contract.price) || {
+                            title: `NEXORA ${contract.tier_name.toUpperCase()}:`,
+                            desc: 'Match Telemetry Grid Sync',
+                            img: taskSolarImg,
+                            badge: 'ACTIVE'
+                          };
+                          const dailyReward = Math.round((contract.price * contract.daily_roi) * 100) / 100;
+                          const progress = runningTasks[contract.id];
+
+                          return (
+                            <div key={`contract-task-${contract.id}`} className="task-card-v3">
+                              <div className="task-card-image-wrap">
+                                <img src={tierDetails.img} alt="asset" className="task-card-image" />
+                              </div>
+                              <div className="task-card-info-wrap">
+                                <span className="task-card-badge">{tierDetails.badge}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span className="task-card-title">{tierDetails.title}</span>
+                                  <h4 className="task-card-desc">{tierDetails.desc}</h4>
+                                </div>
+                                <div className="task-card-specs-row">
+                                  <div className="task-card-spec-item">
+                                    <div className="task-card-spec-icon-box reward">
+                                      <DollarSign size={16} />
+                                    </div>
+                                    <div className="task-card-spec-details">
+                                      <span className="task-card-spec-label">Reward</span>
+                                      <span className="task-card-spec-val reward">+{dailyReward > 0 ? `$${dailyReward.toFixed(2)} USD` : 'Active'}</span>
+                                    </div>
+                                  </div>
+                                  <div className="task-card-spec-item">
+                                    <div className="task-card-spec-icon-box deadline">
+                                      <Calendar size={16} />
+                                    </div>
+                                    <div className="task-card-spec-details">
+                                      <span className="task-card-spec-label">Deadline</span>
+                                      <span className="task-card-spec-val deadline">Today, 11:59 PM</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="task-card-action-wrap">
+                                <button 
+                                  type="button"
+                                  onClick={() => handleRunTask(contract.id)}
+                                  disabled={progress !== undefined}
+                                  className={`task-action-btn ${progress !== undefined ? 'running' : 'start'}`}
+                                >
+                                  {progress !== undefined ? (
+                                    <>
+                                      <RefreshCw size={14} className="active-spinning" />
+                                      Syncing {progress}%
+                                    </>
+                                  ) : (
+                                    <>
+                                      Start Task <Zap size={14} fill="currentColor" />
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {/* 2. Locked Tasks */}
+                        {canonicalTiers.filter(tier => !activeUserContracts.some(c => c.tier_name === tier.name || c.price === tier.price)).map(tier => (
+                          <div key={`locked-task-${tier.id}`} className="task-card-v3 locked">
+                            <div className="task-card-image-wrap">
+                              <img src={tier.img} alt="asset" className="task-card-image" style={{ filter: 'grayscale(0.6) brightness(0.6)' }} />
+                              <div style={{ position: 'absolute', background: 'rgba(0,0,0,0.6)', padding: '8px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                <Lock size={16} style={{ color: 'var(--text-muted)' }} />
+                              </div>
+                            </div>
+                            <div className="task-card-info-wrap">
+                              <span className="task-card-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                <span className="task-card-title" style={{ color: 'var(--text-muted)' }}>{tier.title}</span>
+                                <h4 className="task-card-desc" style={{ color: 'var(--text-muted)' }}>{tier.desc}</h4>
+                              </div>
+                              <div className="task-card-specs-row">
+                                <div className="task-card-spec-item">
+                                  <div className="task-card-spec-icon-box reward" style={{ color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.05)', background: 'transparent' }}>
+                                    <DollarSign size={16} />
+                                  </div>
+                                  <div className="task-card-spec-details">
+                                    <span className="task-card-spec-label">Reward</span>
+                                    <span className="task-card-spec-val" style={{ color: 'var(--text-muted)' }}>+${tier.daily_return.toFixed(2)} USD</span>
+                                  </div>
+                                </div>
+                                <div className="task-card-spec-item">
+                                  <div className="task-card-spec-icon-box deadline" style={{ color: 'var(--text-muted)', borderColor: 'rgba(255,255,255,0.05)', background: 'transparent' }}>
+                                    <Calendar size={16} />
+                                  </div>
+                                  <div className="task-card-spec-details">
+                                    <span className="task-card-spec-label">Deadline</span>
+                                    <span className="task-card-spec-val" style={{ color: 'var(--text-muted)' }}>Today, 11:59 PM</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="task-card-action-wrap">
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  showStatus(`Lease active contract of ${tier.name} to unlock this task! Redirecting...`, 'info');
+                                  setTimeout(() => {
+                                    setActiveTab('invest');
+                                  }, 1500);
+                                }}
+                                className="task-action-btn locked"
+                              >
+                                Unlock Tier <ArrowUpRight size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        {activeUserContracts.length === 0 && (
+                          <div className="glass-card" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            <Zap size={32} style={{ color: 'var(--accent-gold)', marginBottom: '12px' }} />
+                            <p style={{ fontSize: '14px' }}>No active dynamic grid tasks running on your profile.</p>
+                            <p style={{ fontSize: '12px', marginTop: '6px' }}>Visit the project store to lease energy assets and start collecting daily telemetry rewards.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {taskSubTab === 'completed' && (
+                      <>
+                        {completedContracts.map(contract => {
+                          const tierDetails = canonicalTiers.find(t => t.name === contract.tier_name || t.price === contract.price) || {
+                            title: `NEXORA ${contract.tier_name.toUpperCase()}:`,
+                            desc: 'Match Telemetry Grid Sync',
+                            img: taskSolarImg,
+                            badge: 'COMPLETED'
+                          };
+                          const dailyReward = Math.round((contract.price * contract.daily_roi) * 100) / 100;
+
+                          return (
+                            <div key={`completed-task-${contract.id}`} className="task-card-v3 completed">
+                              <div className="task-card-image-wrap">
+                                <img src={tierDetails.img} alt="asset" className="task-card-image" style={{ filter: 'brightness(0.7)' }} />
+                              </div>
+                              <div className="task-card-info-wrap">
+                                <span className="task-card-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>{tierDetails.badge}</span>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  <span className="task-card-title">{tierDetails.title}</span>
+                                  <h4 className="task-card-desc">{tierDetails.desc}</h4>
+                                </div>
+                                <div className="task-card-specs-row">
+                                  <div className="task-card-spec-item">
+                                    <div className="task-card-spec-icon-box reward">
+                                      <DollarSign size={16} />
+                                    </div>
+                                    <div className="task-card-spec-details">
+                                      <span className="task-card-spec-label">Reward Claimed</span>
+                                      <span className="task-card-spec-val reward">+{dailyReward > 0 ? `$${dailyReward.toFixed(2)} USD` : 'Active'}</span>
+                                    </div>
+                                  </div>
+                                  <div className="task-card-spec-item">
+                                    <div className="task-card-spec-icon-box deadline">
+                                      <Calendar size={16} />
+                                    </div>
+                                    <div className="task-card-spec-details">
+                                      <span className="task-card-spec-label">Completed At</span>
+                                      <span className="task-card-spec-val">
+                                        {contract.last_claimed_at ? new Date(contract.last_claimed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="task-card-action-wrap">
+                                <button type="button" disabled className="task-action-btn completed">
+                                  Completed <Check size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                        {completedContracts.length === 0 && (
+                          <div className="glass-card" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                            <Clock size={32} style={{ color: 'var(--accent-blue)', marginBottom: '12px' }} />
+                            <p style={{ fontSize: '14px' }}>No tasks completed yet today.</p>
+                            <p style={{ fontSize: '12px', marginTop: '6px' }}>Go to the 'In progress' tab to run your active node telemetry tasks.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* BOTTOM SECTIONS: ADDITIONAL TELEMETRY & SOCIAL CHANNELS */}
+                  <div style={{ marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '30px' }}>
+                    <h3 style={{ fontSize: '16px', marginBottom: '4px', fontFamily: 'var(--font-display)' }}>Node Telemetry Allowances & Social Amplification</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', marginBottom: '20px' }}>Maximize earnings by completing daily node validations and sharing Nexora promotional updates.</p>
+                    
+                    <div className="home-dashboard-grid">
+                      {/* Left: Daily Attendance checkin */}
+                      <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 style={{ fontSize: '15px' }}>Daily Attendance Telemetry</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Synchronize your node telemetry once daily to claim attendance allowance.</p>
+                          </div>
+                          <div style={{ background: 'var(--accent-green-glow)', padding: '8px', borderRadius: '50%' }}>
+                            <CheckSquare size={20} style={{ color: 'var(--accent-green)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                          <span>Daily Allowance:</span>
+                          <strong style={{ color: 'var(--accent-green)' }}>+$0.20 USD</strong>
+                        </div>
+
+                        <button 
+                          type="button"
+                          onClick={claimAttendance}
+                          className="btn-primary" 
+                          style={{ justifyContent: 'center', marginTop: '5px' }}
+                        >
+                          Complete Attendance Telemetry
+                        </button>
+                      </div>
+
+                      {/* Recruitment Milestone Challenge */}
+                      <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 style={{ fontSize: '15px' }}>Recruitment Milestone Challenge</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Expand your network: get 3 direct Level 1 downlines to active Tier 1 ($10+) lease project.</p>
+                          </div>
+                          <div style={{ background: 'var(--accent-gold-glow)', padding: '8px', borderRadius: '50%' }}>
+                            <Users size={20} style={{ color: 'var(--accent-gold)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                          <span>Milestone Reward:</span>
+                          <strong style={{ color: 'var(--accent-gold)' }}>+$10.00 USD</strong>
+                        </div>
+
+                        {/* Recruitment progress */}
+                        {user && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px' }}>
+                              <span>Active Downline Leases:</span>
+                              <strong>{user.stats?.activeDownlinesCount || 0} / 3 Nodes</strong>
+                            </div>
+                            <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, ((user.stats?.activeDownlinesCount || 0) / 3) * 100)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-gold) 0%, #ff8f00 100%)' }}></div>
+                            </div>
+                          </div>
+                        )}
+
+                        <button 
+                          type="button"
+                          onClick={claimRecruitmentMilestone}
+                          disabled={!user || (user.stats?.activeDownlinesCount || 0) < 3 || user.milestone_recruitment_claimed === 1}
+                          className="btn-primary" 
+                          style={{
+                            justifyContent: 'center',
+                            background: user && user.milestone_recruitment_claimed === 1 ? 'var(--bg-tertiary)' : (user && (user.stats?.activeDownlinesCount || 0) >= 3) ? 'linear-gradient(135deg, var(--accent-gold) 0%, #ff8f00 100%)' : 'var(--bg-tertiary)',
+                            color: user && user.milestone_recruitment_claimed === 1 ? 'var(--text-muted)' : (user && (user.stats?.activeDownlinesCount || 0) >= 3) ? '#000' : 'var(--text-muted)',
+                            cursor: (user && (user.stats?.activeDownlinesCount || 0) >= 3 && user.milestone_recruitment_claimed !== 1) ? 'pointer' : 'not-allowed',
+                            border: '1px solid var(--border-color)'
+                          }}
+                        >
+                          {user && user.milestone_recruitment_claimed === 1 ? "Milestone Claimed" : "Claim Recruitment Reward"}
+                        </button>
+                      </div>
+
+                      {/* Right Column: Social sharing Screenshot Uploader */}
+                      <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 style={{ fontSize: '15px' }}>Social Amplification sharing</h3>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '11px', marginTop: '4px' }}>Share Nexora official banners on Facebook/TikTok. Upload proof screenshot here.</p>
+                          </div>
+                          <div style={{ background: 'var(--accent-blue-glow)', padding: '8px', borderRadius: '50%' }}>
+                            <Upload size={20} style={{ color: 'var(--accent-blue)' }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px' }}>
+                          <span>Promotion Reward:</span>
+                          <strong style={{ color: 'var(--accent-green)' }}>+$1.00 USD</strong>
+                        </div>
+
+                        <form onSubmit={submitSocialTask} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Choose Screenshot Proof Image</label>
+                            <input type="file" accept="image/*" onChange={handleFileChange} className="glass-input" style={{ fontSize: '12px' }} />
+                          </div>
+
+                          {/* Image preview */}
+                          {proofBase64 && (
+                            <div style={{ border: '1px solid var(--border-color)', borderRadius: '8px', overflow: 'hidden', maxHeight: '160px' }}>
+                              <img src={proofBase64} alt="proof preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                          )}
+
+                          <button type="submit" className="btn-primary" style={{ justifyContent: 'center', width: '100%' }}>
+                            Submit Screenshot Proof
+                          </button>
+                        </form>
+
+                        <div style={{ marginTop: '10px', fontSize: '11.5px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '12px', color: 'var(--text-muted)' }}>
+                          <span>Status: Submit post screenshot to claim reward after review.</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
                 </div>
-
-              </div>
-            )}
+              );
+            })()}
 
             {/* TAB 4: TEAM (referral affiliate tree) */}
             {activeTab === 'team' && (
@@ -2821,31 +3387,31 @@ export default function App() {
               
               <div className="agreement-details-table" style={{ background: 'rgba(0,0,0,0.25)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '14px', color: 'var(--text-main)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Lessor Client Name:</span>
-                  <strong>{user ? (user.full_name || 'NOT CONFIGURED (Setup in Me tab)') : ''}</strong>
+                  <span>Account Holder Name:</span>
+                  <strong>{user ? (user.full_name || user.phone || 'Nexora User') : 'Nexora User'}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Lessor Client Mobile:</span>
-                  <strong>{user ? user.phone : ''}</strong>
+                  <span>Localized Timestamp:</span>
+                  <strong>{new Date().toLocaleString()}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Asset Infrastructure:</span>
+                  <span>Selected Project Tier:</span>
                   <strong>{selectedAgreementProject.name}</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Purchase Cost:</span>
+                  <span>Contract Principal:</span>
                   <strong>${selectedAgreementProject.price.toLocaleString()} USD</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Daily Earnings Yield:</span>
+                  <span>Daily Passive Profit:</span>
                   <strong style={{ color: 'var(--accent-green)' }}>+${selectedAgreementProject.dailyProfit.toLocaleString()} USD/day</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0' }}>
-                  <span>Lock-in Duration:</span>
+                  <span>Contract Duration:</span>
                   <strong>{selectedAgreementProject.duration} Days</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', margin: '4px 0', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '6px' }}>
-                  <span>Guaranteed Net Yield:</span>
+                  <span>Total Guaranteed Return:</span>
                   <strong style={{ color: 'var(--accent-gold)' }}>${selectedAgreementProject.totalProfit.toLocaleString()} USD</strong>
                 </div>
               </div>
@@ -2881,7 +3447,7 @@ export default function App() {
                 className="btn-primary" 
                 style={{ width: '100%', justifyContent: 'center', background: agreementChecked ? 'linear-gradient(135deg, var(--accent-gold) 0%, #ff8f00 100%)' : 'var(--bg-tertiary)', color: '#000', cursor: agreementChecked ? 'pointer' : 'not-allowed' }}
               >
-                Sign & Authorize Lease Contract
+                AGREE & ACTIVATE CONTRACT
               </button>
             </div>
           </div>
