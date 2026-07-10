@@ -2895,35 +2895,35 @@ export default function App() {
                         {/* 2. Locked Tasks */}
                         {canonicalTiers.filter(tier => tier.price > 0 && !contracts.some(c => c.tier_name === tier.name && c.status === 'active')).map(tier => (
                           <div key={`locked-task-${tier.id}`} className="task-card-v4 locked">
-                            <div className="task-card-v4-image-wrap" style={{ opacity: 0.5 }}>
-                              <img src={tier.img} alt="asset" className="task-card-v4-image" style={{ filter: 'grayscale(0.6) brightness(0.6)' }} />
+                            <div className="task-card-v4-image-wrap" style={{ opacity: 0.85 }}>
+                              <img src={tier.img} alt="asset" className="task-card-v4-image" style={{ filter: 'grayscale(1) brightness(0.9) sepia(1) hue-rotate(180deg) saturate(2.4) contrast(1.05)' }} />
                             </div>
-                            
-                            <div className="task-card-v4-info" style={{ opacity: 0.5 }}>
-                              <span className="task-card-v4-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
-                              <span className="task-card-v4-title" style={{ display: 'block', marginTop: '6px', color: 'var(--text-muted)' }}>{tier.title}</span>
-                              <h4 className="task-card-v4-desc" style={{ color: 'var(--text-muted)' }}>{tier.desc}</h4>
-                              
+
+                            <div className="task-card-v4-info">
+                              <span className="task-card-v4-badge locked-badge">LOCKED</span>
+                              <span className="task-card-v4-title" style={{ display: 'block', marginTop: '6px', color: '#94a3b8' }}>{tier.title}</span>
+                              <h4 className="task-card-v4-desc" style={{ color: '#64748b' }}>{tier.desc}</h4>
+
                               <div className="task-card-v4-spec-list">
                                 <div className="task-card-v4-spec-item">
-                                  <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
+                                  <div className="task-card-v4-spec-icon" style={{ color: '#64748b' }}>
                                     <Wallet size={14} />
                                   </div>
                                   <span className="task-card-v4-spec-label">REWARD</span>
-                                  <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>+${tier.daily_return.toFixed(2)} USD</span>
+                                  <span className="task-card-v4-spec-value" style={{ color: '#94a3b8' }}>+${tier.daily_return.toFixed(2)} USD</span>
                                 </div>
                                 <div className="task-card-v4-spec-item">
-                                  <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
+                                  <div className="task-card-v4-spec-icon" style={{ color: '#64748b' }}>
                                     <Calendar size={14} />
                                   </div>
                                   <span className="task-card-v4-spec-label">DEADLINE</span>
-                                  <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>Today, 11:59 PM</span>
+                                  <span className="task-card-v4-spec-value" style={{ color: '#94a3b8' }}>Today, 11:59 PM</span>
                                 </div>
                               </div>
                             </div>
 
                             <div className="task-card-v4-action">
-                              <button 
+                              <button
                                 type="button"
                                 onClick={() => {
                                   showStatus(`Lease active contract of ${tier.name} to unlock this task! Redirecting...`, 'info');

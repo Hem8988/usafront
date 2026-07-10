@@ -2722,9 +2722,9 @@ select.glass-input {
   align-items: center;
   gap: 20px;
   padding: 18px 20px;
-  background: rgba(15, 23, 42, 0.45) !important;
+  background: rgba(8, 12, 24, 0.65) !important;
   border: 1px solid #1e293b !important;
-  border-radius: 16px !important;
+  border-radius: 18px !important;
   backdrop-filter: blur(12px) !important;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35) !important;
   transition: all 0.3s ease !important;
@@ -2804,12 +2804,10 @@ select.glass-input {
 
 .task-card-v4-desc {
   font-size: 14.5px;
-  font-weight: 600;
-  color: #94a3b8;
+  font-weight: 700;
+  color: #f1f5f9;
   margin-top: -2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
 .task-card-v4-spec-list {
@@ -2882,9 +2880,20 @@ select.glass-input {
 }
 
 .task-card-v4-btn.locked {
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: #64748b !important;
+  background: rgba(148, 163, 184, 0.12) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
   box-shadow: none !important;
+}
+
+.task-card-v4-badge.locked-badge {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.task-card-v4.locked .task-card-v4-image-wrap {
+  border-color: rgba(148, 163, 184, 0.15) !important;
 }
 
 .task-card-v4-btn.completed {
