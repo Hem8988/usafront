@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock,
   Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy,
-  Check, X, Award, Handshake, Info, Headphones, Settings,
+  Check, X, Award, Handshake, Info, Headphones, Settings, User,
   FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List,
   Clock, Trash2, Leaf, House, Sun, Droplet, Wind, WavesHorizontal, Flame,
   Server, Gem, Globe, ListFilter, DollarSign, TrendingUp, Calendar, Wallet
@@ -19,11 +19,11 @@ const API_BASE = '/api';
 
 // Sticky 5-Tab Navigation Items
 const bottomNavItems = [
-  { id: 'dashboard', label: 'Home', icon: Cpu },
+  { id: 'dashboard', label: 'Home', icon: House },
   { id: 'invest', label: 'Projects', icon: Layers },
-  { id: 'tasks', label: 'Tasks', icon: Award },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
   { id: 'team', label: 'Team', icon: Users },
-  { id: 'me', label: 'Me', icon: Settings }
+  { id: 'me', label: 'Me', icon: User }
 ];
 
 // Category icon per project tier, keyed by LEASE_PROJECTS id
@@ -2375,13 +2375,30 @@ export default function App() {
             
             {/* Mobile-Only Header status */}
             <div className="mobile-only-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 24px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', height: '56px' }}>
-              <div>
-                <h3 style={{ fontSize: '15px', color: '#fff', letterSpacing: '0.5px' }}>NEXORA</h3>
-                <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Green Grid Custody</span>
-              </div>
-              <div className="header-balance-pill" onClick={() => setActiveTab('me')} style={{ background: 'var(--accent-green-glow)', border: '1px solid rgba(0, 230, 118, 0.2)', padding: '5px 12px', borderRadius: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ color: 'var(--accent-green)', fontWeight: 'bold' }}>$</span>
-                <strong style={{ color: '#fff', fontSize: '13px' }}>{user ? user.total_balance.toFixed(2) : '0.00'}</strong>
+              <h3 style={{ fontSize: '18px', color: '#fff', letterSpacing: '1.5px', fontWeight: 800 }}>NEXORA</h3>
+              <div
+                className="header-wallet-card"
+                onClick={() => setActiveTab('me')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid rgba(6, 182, 212, 0.25)',
+                  borderRadius: '12px',
+                  padding: '6px 12px',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: 'rgba(6, 182, 212, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#06b6d4', flexShrink: 0 }}>
+                  <Wallet size={16} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+                  <span style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px', fontWeight: 600 }}>Deposit Wallet</span>
+                  <strong style={{ fontSize: '14px', color: '#06e6c8' }}>
+                    ${user ? user.deposit_balance.toFixed(2) : '0.00'} <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 600 }}>USD</span>
+                  </strong>
+                </div>
               </div>
             </div>
 
@@ -2840,10 +2857,8 @@ export default function App() {
                               </div>
                               
                               <div className="task-card-v4-info">
-                                <div className="task-card-v4-header">
-                                  <span className="task-card-v4-badge">{tierDetails.badge}</span>
-                                  <span className="task-card-v4-title">{tierDetails.title}</span>
-                                </div>
+                                <span className="task-card-v4-badge">{tierDetails.badge}</span>
+                                <span className="task-card-v4-title" style={{ display: 'block', marginTop: '6px' }}>{tierDetails.title}</span>
                                 <h4 className="task-card-v4-desc">{tierDetails.desc}</h4>
                                 
                                 <div className="task-card-v4-spec-list">
@@ -2851,14 +2866,14 @@ export default function App() {
                                     <div className="task-card-v4-spec-icon" style={{ color: '#10B981' }}>
                                       <Wallet size={14} />
                                     </div>
-                                    <span className="task-card-v4-spec-label">Reward</span>
+                                    <span className="task-card-v4-spec-label">REWARD</span>
                                     <span className="task-card-v4-spec-value reward">+${task.reward.toFixed(2)} USD</span>
                                   </div>
                                   <div className="task-card-v4-spec-item">
                                     <div className="task-card-v4-spec-icon" style={{ color: '#06B6D4' }}>
                                       <Calendar size={14} />
                                     </div>
-                                    <span className="task-card-v4-spec-label">Deadline</span>
+                                    <span className="task-card-v4-spec-label">DEADLINE</span>
                                     <span className="task-card-v4-spec-value">Today, 11:59 PM</span>
                                   </div>
                                 </div>
@@ -2885,10 +2900,8 @@ export default function App() {
                             </div>
                             
                             <div className="task-card-v4-info" style={{ opacity: 0.5 }}>
-                              <div className="task-card-v4-header">
-                                <span className="task-card-v4-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
-                                <span className="task-card-v4-title" style={{ color: 'var(--text-muted)' }}>{tier.title}</span>
-                              </div>
+                              <span className="task-card-v4-badge" style={{ color: 'var(--text-muted)', background: 'rgba(255,255,255,0.05)', borderColor: 'rgba(255,255,255,0.08)' }}>LOCKED</span>
+                              <span className="task-card-v4-title" style={{ display: 'block', marginTop: '6px', color: 'var(--text-muted)' }}>{tier.title}</span>
                               <h4 className="task-card-v4-desc" style={{ color: 'var(--text-muted)' }}>{tier.desc}</h4>
                               
                               <div className="task-card-v4-spec-list">
@@ -2896,14 +2909,14 @@ export default function App() {
                                   <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
                                     <Wallet size={14} />
                                   </div>
-                                  <span className="task-card-v4-spec-label">Reward</span>
+                                  <span className="task-card-v4-spec-label">REWARD</span>
                                   <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>+${tier.daily_return.toFixed(2)} USD</span>
                                 </div>
                                 <div className="task-card-v4-spec-item">
                                   <div className="task-card-v4-spec-icon" style={{ color: 'var(--text-muted)' }}>
                                     <Calendar size={14} />
                                   </div>
-                                  <span className="task-card-v4-spec-label">Deadline</span>
+                                  <span className="task-card-v4-spec-label">DEADLINE</span>
                                   <span className="task-card-v4-spec-value" style={{ color: 'var(--text-muted)' }}>Today, 11:59 PM</span>
                                 </div>
                               </div>
@@ -2945,10 +2958,8 @@ export default function App() {
                               </div>
                               
                               <div className="task-card-v4-info">
-                                <div className="task-card-v4-header">
-                                  <span className="task-card-v4-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>COMPLETED</span>
-                                  <span className="task-card-v4-title">{tierDetails.title}</span>
-                                </div>
+                                <span className="task-card-v4-badge" style={{ color: 'var(--accent-green)', background: 'var(--accent-green-glow)', borderColor: 'rgba(0,230,118,0.2)' }}>COMPLETED</span>
+                                <span className="task-card-v4-title" style={{ display: 'block', marginTop: '6px' }}>{tierDetails.title}</span>
                                 <h4 className="task-card-v4-desc">{tierDetails.desc}</h4>
                                 
                                 <div className="task-card-v4-spec-list">
@@ -2956,14 +2967,14 @@ export default function App() {
                                     <div className="task-card-v4-spec-icon" style={{ color: '#10B981' }}>
                                       <Wallet size={14} />
                                     </div>
-                                    <span className="task-card-v4-spec-label">Reward Claimed</span>
+                                    <span className="task-card-v4-spec-label">REWARD CLAIMED</span>
                                     <span className="task-card-v4-spec-value reward">+${task.reward.toFixed(2)} USD</span>
                                   </div>
                                   <div className="task-card-v4-spec-item">
                                     <div className="task-card-v4-spec-icon" style={{ color: '#06B6D4' }}>
                                       <Calendar size={14} />
                                     </div>
-                                    <span className="task-card-v4-spec-label">Claimed At</span>
+                                    <span className="task-card-v4-spec-label">CLAIMED AT</span>
                                     <span className="task-card-v4-spec-value">Today</span>
                                   </div>
                                 </div>

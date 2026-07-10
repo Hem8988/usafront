@@ -1552,6 +1552,33 @@ select.glass-input {
   display: none !important;
 }
 
+.phone-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px));
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.phone-bottom-nav-item svg {
+  transition: var(--transition);
+}
+
+.phone-bottom-nav-item.active-tab {
+  color: #06b6d4;
+}
+
+.phone-bottom-nav-item.active-tab svg {
+  filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.55));
+}
+
 @media (max-width: 768px) {
   .desktop-app-header {
     display: none !important;
@@ -1566,7 +1593,7 @@ select.glass-input {
     padding: 0 16px;
     flex-shrink: 0;
   }
-  
+
   .phone-bottom-nav-bar {
     display: flex !important;
     position: fixed;
@@ -1574,6 +1601,13 @@ select.glass-input {
     left: 0;
     right: 0;
     z-index: 999;
+    justify-content: space-around;
+    align-items: center;
+    background: rgba(12, 15, 29, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--border-color);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   
   .portal-container {
@@ -2659,6 +2693,7 @@ select.glass-input {
   cursor: pointer !important;
   transition: all 0.3s ease !important;
   text-align: center;
+  position: relative !important;
 }
 
 .task-tab-btn-v4.active {
@@ -2666,6 +2701,19 @@ select.glass-input {
   color: #FFFFFF !important;
   box-shadow: 0 0 15px rgba(6, 182, 212, 0.35) !important;
   border: 1px solid rgba(6, 182, 212, 0.5) !important;
+}
+
+.task-tab-btn-v4.active::after {
+  content: '';
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 3px;
+  background: #06B6D4;
+  border-radius: 2px;
+  box-shadow: 0 0 8px #06B6D4;
 }
 
 .task-card-v4 {
