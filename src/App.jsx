@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Zap, Shield, Cpu, Layers, Users, ArrowUpRight, ArrowDownLeft, Lock,
   Unlock, Send, RefreshCw, CheckCircle2, AlertTriangle, Plus, Copy,
-  Check, X, Award, Handshake, Info, Headphones, Settings, User,
+  Check, X, Award, Handshake, Info, Headphones, Settings, User, ChevronRight,
   FileText, Mail, LogOut, Share2, ShieldAlert, Upload, CheckSquare, List,
   Clock, Trash2, Leaf, House, Sun, Droplet, Wind, WavesHorizontal, Flame,
   Server, Gem, Globe, ListFilter, DollarSign, TrendingUp, Calendar, Wallet
@@ -2399,6 +2399,7 @@ export default function App() {
                     ${user ? user.deposit_balance.toFixed(2) : '0.00'} <span style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 600 }}>USD</span>
                   </strong>
                 </div>
+                <ChevronRight size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               </div>
             </div>
 
